@@ -461,10 +461,6 @@ local function CreateButton(Tab, Settings)
     return Button
 end
 
-----------------------------------------------------------------
--- TOGGLE
-----------------------------------------------------------------
-
 local function CreateToggle(Tab, Settings)
     Settings = Settings or {}
 
@@ -505,11 +501,30 @@ local function CreateToggle(Tab, Settings)
     local YOffset = 10 + ((Index - 1) * 34)
 
     ------------------------------------------------------------
+    -- CONTAINER
+    ------------------------------------------------------------
+
+    local Container = Create("Frame", {
+        Name = "Toggle_" .. Toggle.ID,
+
+        BackgroundTransparency = 1,
+
+        BorderSizePixel = 0,
+
+        Size = UDim2.new(1, 0, 0, 24),
+        Position = UDim2.new(0, 0, 0, YOffset),
+
+        Parent = Tab.ControlsContainer,
+    })
+
+    Toggle.Frame = Container
+
+    ------------------------------------------------------------
     -- TOGGLE BUTTON
     ------------------------------------------------------------
 
     local ToggleButton = Create("TextButton", {
-        Name = "Toggle_" .. Toggle.ID,
+        Name = "ToggleButton",
 
         AutoButtonColor = false,
 
@@ -519,14 +534,14 @@ local function CreateToggle(Tab, Settings)
         BorderColor3 = COLORS.ControlBorder,
 
         Size = UDim2.new(0, 11, 0, 18),
-        Position = UDim2.new(0, 28, 0, YOffset),
+        Position = UDim2.new(0, 28, 0, 0),
 
         Text = "",
 
-        Parent = Tab.ControlsContainer,
+        Parent = Container,
     })
 
-    Toggle.Frame = ToggleButton
+    Toggle.ToggleButton = ToggleButton
 
     ------------------------------------------------------------
     -- TITLE
@@ -537,8 +552,10 @@ local function CreateToggle(Tab, Settings)
 
         BackgroundTransparency = 1,
 
-        Size = UDim2.new(0, 100, 1, 0),
-        Position = UDim2.new(0, 17, 0, 0),
+        BorderSizePixel = 0,
+
+        Size = UDim2.new(0, 120, 0, 18),
+        Position = UDim2.new(0, 45, 0, 0),
 
         Text = Settings.Name,
 
@@ -546,10 +563,11 @@ local function CreateToggle(Tab, Settings)
         TextSize = 14,
 
         TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
 
         Font = FONTS.Main,
 
-        Parent = ToggleButton,
+        Parent = Container,
     })
 
     Toggle.Title = Title
@@ -565,17 +583,22 @@ local function CreateToggle(Tab, Settings)
 
         BackgroundTransparency = 1,
 
-        Size = UDim2.new(0, 35, 1, 0),
-        Position = UDim2.new(1, 3, 0, 0),
+        BorderSizePixel = 0,
+
+        Size = UDim2.new(0, 45, 0, 18),
+        Position = UDim2.new(0, 170, 0, 0),
 
         Text = "[-]",
 
         TextColor3 = COLORS.Text,
         TextSize = 13,
 
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+
         Font = FONTS.Main,
 
-        Parent = ToggleButton,
+        Parent = Container,
     })
 
     Toggle.BindButton = Bind
