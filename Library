@@ -1,10 +1,3 @@
---[[
-    DINGOSQUAD
-    Initial API foundation
-
-    This file is loaded by the executor and returns the Library table.
-]]
-
 local Library = {}
 
 Library.Version = "0.1.0"
@@ -18,12 +11,13 @@ local function CreateWindowObject(Settings)
             or Color3.fromRGB(150, 8, 34),
 
         Tabs = {},
+        Controls = {},
     }
 
     function Window:CreateTab(Name)
         assert(
             type(Name) == "string" and Name ~= "",
-            "FantaUI: Tab name must be a non-empty string"
+            "DINGOSQUAD: Tab name must be a non-empty string"
         )
 
         local Tab = {
