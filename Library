@@ -769,7 +769,10 @@ local function CreateWindowObject(Settings)
 
         Controls = {},
 
-        State = {},
+        State = {
+    Tabs = {},
+    Controls = {},
+},
 
         Connections = {},
 
