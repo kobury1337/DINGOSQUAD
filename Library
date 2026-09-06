@@ -1,18 +1,807 @@
+--[[
+    DINGOSQUAD
+    Stage 1 - UI / Window / Tab Foundation
+
+    Features:
+        • CreateWindow()
+        • Dynamic tabs
+        • Tab switching
+        • Permanent Config tab
+        • Config tab always at bottom
+        • ActivationColor
+        • Window destruction
+        • Tab destruction
+        • Internal state registry
+        • UI based on the supplied converted ScreenGui
+]]
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
 local Library = {}
 
 Library.Version = "0.1.0"
+Library.Windows = {}
+
+----------------------------------------------------------------
+-- SERVICES / CONSTANTS
+----------------------------------------------------------------
+
+local DEFAULT_ACTIVATION_COLOR = Color3.fromRGB(150, 8, 34)
+
+local COLORS = {
+    Black = Color3.fromRGB(4, 4, 4),
+    Dark = Color3.fromRGB(9, 9, 9),
+    Control = Color3.fromRGB(59, 59, 59),
+    Border = Color3.fromRGB(34, 39, 45),
+    ControlBorder = Color3.fromRGB(49, 49, 49),
+    Stroke = Color3.fromRGB(57, 57, 57),
+    White = Color3.fromRGB(255, 255, 255),
+}
+
+local FONTS = {
+    Main = Enum.Font.Inconsolata,
+    Control = Enum.Font.SourceSansPro,
+}
+
+----------------------------------------------------------------
+-- UTILITY
+----------------------------------------------------------------
+
+local function DisconnectConnections(ConnectionList)
+    for _, Connection in ipairs(ConnectionList) do
+        if Connection then
+            pcall(function()
+                Connection:Disconnect()
+            end)
+        end
+    end
+
+    table.clear(ConnectionList)
+end
+
+local function Create(className, properties)
+    local Object = Instance.new(className)
+
+    for Property, Value in pairs(properties or {}) do
+        Object[Property] = Value
+    end
+
+    return Object
+end
+
+local function AddStroke(Object)
+    return Create("UIStroke", {
+        Parent = Object,
+        Thickness = 3.4,
+        Color = COLORS.Stroke,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+        LineJoinMode = Enum.LineJoinMode.Miter,
+    })
+end
+
+local function CreateTextLabel(Parent, Properties)
+    Properties = Properties or {}
+
+    local Label = Create("TextLabel", {
+        Parent = Parent,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+
+        Text = Properties.Text or "",
+        TextColor3 = Properties.TextColor3 or COLORS.White,
+        TextSize = Properties.TextSize or 13,
+        Font = Properties.Font or FONTS.Main,
+
+        TextXAlignment = Properties.TextXAlignment or Enum.TextXAlignment.Left,
+        TextYAlignment = Properties.TextYAlignment or Enum.TextYAlignment.Center,
+
+        Size = Properties.Size or UDim2.fromOffset(70, 13),
+        Position = Properties.Position or UDim2.new(),
+    })
+
+    return Label
+end
+
+----------------------------------------------------------------
+-- TAB BUTTON
+----------------------------------------------------------------
+
+local function CreateTabButton(TabList, Name)
+    local Button = Create("TextButton", {
+        Parent = TabList,
+
+        Name = Name .. "_TabButton",
+
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+
+        Size = UDim2.fromOffset(86, 24),
+
+        Text = Name,
+        TextColor3 = COLORS.White,
+        TextSize = 16,
+        Font = FONTS.Main,
+
+        AutoButtonColor = false,
+        TextWrapped = false,
+    })
+
+    return Button
+end
+
+----------------------------------------------------------------
+-- MAIN WINDOW UI
+----------------------------------------------------------------
+
+local function CreateWindowUI(Window)
+    local ScreenGui = Create("ScreenGui", {
+        Name = "DINGOSQUAD",
+        Parent = PlayerGui,
+
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+    })
+
+    ----------------------------------------------------------------
+    -- MAIN FRAME
+    ----------------------------------------------------------------
+
+    local MainFrame = Create("Frame", {
+        Parent = ScreenGui,
+
+        Name = "MainFrame",
+
+        BorderSizePixel = 6,
+        BackgroundColor3 = COLORS.Black,
+
+        Size = UDim2.fromOffset(674, 561),
+        Position = UDim2.new(
+            0.21533,
+            0,
+            0.03538,
+            0
+        ),
+
+        BorderColor3 = COLORS.Border,
+    })
+
+    AddStroke(MainFrame)
+
+    ----------------------------------------------------------------
+    -- TAB LIST
+    ----------------------------------------------------------------
+
+    local TabList = Create("Frame", {
+        Parent = MainFrame,
+
+        Name = "TabList",
+
+        BackgroundColor3 = COLORS.Dark,
+        BorderColor3 = COLORS.Border,
+
+        Size = UDim2.fromOffset(86, 517),
+
+        Position = UDim2.new(
+            0.04748,
+            0,
+            0.03387,
+            0
+        ),
+    })
+
+    ----------------------------------------------------------------
+    -- TAB BUTTON CONTAINER
+    ----------------------------------------------------------------
+
+    local DynamicTabContainer = Create("Frame", {
+        Parent = TabList,
+
+        Name = "DynamicTabs",
+
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+
+        Size = UDim2.new(1, 0, 0, 400),
+        Position = UDim2.fromOffset(0, 10),
+    })
+
+    local TabLayout = Create("UIListLayout", {
+        Parent = DynamicTabContainer,
+
+        FillDirection = Enum.FillDirection.Vertical,
+
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        VerticalAlignment = Enum.VerticalAlignment.Top,
+
+        SortOrder = Enum.SortOrder.LayoutOrder,
+
+        Padding = UDim.new(0, 2),
+    })
+
+    ----------------------------------------------------------------
+    -- CONFIG BUTTON
+    ----------------------------------------------------------------
+
+    local ConfigButton = Create("TextButton", {
+        Parent = TabList,
+
+        Name = "ConfigTabButton",
+
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+
+        Size = UDim2.fromOffset(86, 24),
+
+        Position = UDim2.new(
+            0,
+            0,
+            0.85687,
+            0
+        ),
+
+        Text = "config",
+        TextColor3 = COLORS.White,
+        TextSize = 16,
+        Font = FONTS.Main,
+
+        AutoButtonColor = false,
+    })
+
+    ----------------------------------------------------------------
+    -- CONTENT CONTAINER
+    ----------------------------------------------------------------
+
+    local ContentContainer = Create("Frame", {
+        Parent = MainFrame,
+
+        Name = "ContentContainer",
+
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+
+        Size = UDim2.fromOffset(480, 517),
+
+        Position = UDim2.new(
+            0.23591,
+            0,
+            0.03387,
+            0
+        ),
+    })
+
+    ----------------------------------------------------------------
+    -- KEYBINDS FRAME
+    ----------------------------------------------------------------
+
+    local Keybinds = Create("Frame", {
+        Parent = ScreenGui,
+
+        Name = "Keybinds",
+
+        Size = UDim2.fromOffset(202, 100),
+
+        Position = UDim2.new(
+            0.80536,
+            0,
+            0.23692,
+            0
+        ),
+
+        BorderSizePixel = 6,
+
+        BackgroundColor3 = COLORS.Black,
+        BorderColor3 = COLORS.Border,
+
+        Visible = false,
+    })
+
+    AddStroke(Keybinds)
+
+    local KeybindTitle = CreateTextLabel(Keybinds, {
+        Text = "Keybinds",
+
+        Size = UDim2.fromOffset(70, 13),
+
+        Position = UDim2.new(
+            0.32286,
+            0,
+            0.06,
+            0
+        ),
+
+        TextSize = 13,
+    })
+
+    local KeybindFrame = Create("Frame", {
+        Parent = Keybinds,
+
+        Name = "KeybindFrame",
+
+        BackgroundColor3 = Color3.fromRGB(27, 27, 27),
+        BorderSizePixel = 0,
+
+        Size = UDim2.fromOffset(160, 61),
+
+        Position = UDim2.new(
+            0.10339,
+            0,
+            0.19,
+            0
+        ),
+    })
+
+    ----------------------------------------------------------------
+    -- WINDOW TABLE
+    ----------------------------------------------------------------
+
+    Window.UI = {
+        ScreenGui = ScreenGui,
+        MainFrame = MainFrame,
+
+        TabList = TabList,
+        DynamicTabContainer = DynamicTabContainer,
+        ConfigButton = ConfigButton,
+
+        ContentContainer = ContentContainer,
+
+        Keybinds = Keybinds,
+        KeybindFrame = KeybindFrame,
+        KeybindTitle = KeybindTitle,
+    }
+
+    return Window
+end
+
+----------------------------------------------------------------
+-- CREATE TAB CONTENT
+----------------------------------------------------------------
+
+local function CreateTabFrame(Window, Tab)
+    local Frame = Create("Frame", {
+        Parent = Window.UI.ContentContainer,
+
+        Name = "TabFrame_" .. Tab.ID,
+
+        BackgroundColor3 = COLORS.Dark,
+        BorderColor3 = COLORS.Border,
+
+        Size = UDim2.fromOffset(480, 517),
+
+        Position = UDim2.new(0, 0, 0, 0),
+
+        Visible = false,
+    })
+
+    ----------------------------------------------------------------
+    -- BUILD LABEL
+    ----------------------------------------------------------------
+
+    local BuildLabel = CreateTextLabel(Frame, {
+        Text = "Build 03/24/26",
+
+        Size = UDim2.fromOffset(100, 13),
+
+        Position = UDim2.new(
+            0.78,
+            0,
+            0.95,
+            0
+        ),
+
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+
+    Tab.UI = {
+        Frame = Frame,
+        BuildLabel = BuildLabel,
+    }
+
+    return Frame
+end
+
+----------------------------------------------------------------
+-- CONFIG FRAME
+----------------------------------------------------------------
+
+local function CreateConfigFrame(Window)
+    local Frame = Create("Frame", {
+        Parent = Window.UI.ContentContainer,
+
+        Name = "configFrame",
+
+        BackgroundColor3 = COLORS.Dark,
+        BorderColor3 = COLORS.Border,
+
+        Size = UDim2.fromOffset(480, 517),
+
+        Position = UDim2.new(0, 0, 0, 0),
+
+        Visible = false,
+    })
+
+    local BuildLabel = CreateTextLabel(Frame, {
+        Text = "Build 03/24/26",
+
+        Size = UDim2.fromOffset(100, 13),
+
+        Position = UDim2.new(
+            0.78,
+            0,
+            0.95,
+            0
+        ),
+
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+
+    ----------------------------------------------------------------
+    -- CONFIG DROPDOWN PLACEHOLDER
+    ----------------------------------------------------------------
+
+    local ConfigDropdown = Create("TextButton", {
+        Parent = Frame,
+
+        Name = "ConfigDropdown",
+
+        Size = UDim2.fromOffset(126, 17),
+
+        Position = UDim2.new(
+            0.05833,
+            0,
+            0.10445,
+            0
+        ),
+
+        BackgroundColor3 = COLORS.Control,
+        BorderColor3 = COLORS.ControlBorder,
+
+        Text = "Configs",
+
+        TextColor3 = COLORS.White,
+        TextSize = 13,
+        Font = FONTS.Main,
+
+        TextXAlignment = Enum.TextXAlignment.Left,
+
+        AutoButtonColor = false,
+    })
+
+    ----------------------------------------------------------------
+    -- SHOW KEYBINDS TOGGLE
+    ----------------------------------------------------------------
+
+    local ShowKeybindsToggle = Create("TextButton", {
+        Parent = Frame,
+
+        Name = "ShowKeybinds",
+
+        Size = UDim2.fromOffset(11, 18),
+
+        Position = UDim2.new(
+            0.53542,
+            0,
+            0.11025,
+            0
+        ),
+
+        BackgroundColor3 = COLORS.Control,
+        BorderColor3 = COLORS.ControlBorder,
+
+        Text = "",
+
+        AutoButtonColor = false,
+    })
+
+    Create("UIAspectRatioConstraint", {
+        Parent = ShowKeybindsToggle,
+    })
+
+    CreateTextLabel(ShowKeybindsToggle, {
+        Text = "Show keybinds",
+
+        Size = UDim2.fromOffset(90, 13),
+
+        Position = UDim2.new(
+            0,
+            16,
+            0,
+            -1
+        ),
+
+        TextSize = 13,
+    })
+
+    ----------------------------------------------------------------
+    -- CONFIG NAME BOX
+    ----------------------------------------------------------------
+
+    local ConfigName = Create("TextBox", {
+        Parent = Frame,
+
+        Name = "ConfigName",
+
+        Size = UDim2.fromOffset(126, 26),
+
+        Position = UDim2.new(
+            0.05833,
+            0,
+            0.2147,
+            0
+        ),
+
+        BackgroundColor3 = COLORS.Control,
+        BorderColor3 = COLORS.ControlBorder,
+
+        Text = "",
+        PlaceholderText = "",
+
+        TextColor3 = Color3.fromRGB(0, 0, 0),
+
+        TextSize = 14,
+        Font = FONTS.Control,
+
+        ClearTextOnFocus = false,
+
+        TextXAlignment = Enum.TextXAlignment.Center,
+    })
+
+    CreateTextLabel(ConfigName, {
+        Text = "Create Config",
+
+        Size = UDim2.fromOffset(90, 13),
+
+        Position = UDim2.new(
+            0,
+            10,
+            0,
+            -13
+        ),
+
+        TextSize = 13,
+    })
+
+    ----------------------------------------------------------------
+    -- CONFIG BUTTONS
+    ----------------------------------------------------------------
+
+    local SaveButton = Create("TextButton", {
+        Parent = ConfigName,
+
+        Name = "Save",
+
+        Size = UDim2.fromOffset(58, 19),
+
+        Position = UDim2.new(
+            0,
+            0,
+            1.42308,
+            0
+        ),
+
+        BackgroundColor3 = COLORS.Control,
+
+        BorderColor3 = COLORS.ControlBorder,
+
+        Text = "Save",
+
+        TextColor3 = COLORS.White,
+        TextSize = 13,
+        Font = FONTS.Main,
+
+        AutoButtonColor = false,
+    })
+
+    local OverrideButton = Create("TextButton", {
+        Parent = ConfigName,
+
+        Name = "Override",
+
+        Size = UDim2.fromOffset(58, 19),
+
+        Position = UDim2.new(
+            0.53968,
+            0,
+            1.42308,
+            0
+        ),
+
+        BackgroundColor3 = COLORS.Control,
+
+        BorderColor3 = COLORS.ControlBorder,
+
+        Text = "Override",
+
+        TextColor3 = COLORS.White,
+        TextSize = 13,
+        Font = FONTS.Main,
+
+        AutoButtonColor = false,
+    })
+
+    local LoadButton = Create("TextButton", {
+        Parent = ConfigName,
+
+        Name = "Load",
+
+        Size = UDim2.fromOffset(58, 19),
+
+        Position = UDim2.new(
+            0.26984,
+            0,
+            2.65385,
+            0
+        ),
+
+        BackgroundColor3 = COLORS.Control,
+
+        BorderColor3 = COLORS.ControlBorder,
+
+        Text = "Load",
+
+        TextColor3 = COLORS.White,
+        TextSize = 13,
+        Font = FONTS.Main,
+
+        AutoButtonColor = false,
+    })
+
+    Window.ConfigUI = {
+        Frame = Frame,
+
+        BuildLabel = BuildLabel,
+
+        ConfigDropdown = ConfigDropdown,
+        ShowKeybindsToggle = ShowKeybindsToggle,
+
+        ConfigName = ConfigName,
+
+        SaveButton = SaveButton,
+        OverrideButton = OverrideButton,
+        LoadButton = LoadButton,
+    }
+
+    return Frame
+end
+
+----------------------------------------------------------------
+-- TAB POSITIONING
+----------------------------------------------------------------
+
+local function UpdateTabButtons(Window)
+    local Tabs = Window.Tabs
+
+    for Index, Tab in ipairs(Tabs) do
+        if Tab.Button then
+            Tab.Button.LayoutOrder = Index
+        end
+    end
+
+    -- Config always remains visually at the bottom.
+    Window.UI.ConfigButton.LayoutOrder = 999999
+end
+
+----------------------------------------------------------------
+-- ACTIVATE TAB
+----------------------------------------------------------------
+
+local function ActivateTab(Window, Tab)
+    if Window.Destroyed then
+        return
+    end
+
+    if not Tab or Tab.Destroyed then
+        return
+    end
+
+    Window.ActiveTab = Tab
+
+    for _, OtherTab in ipairs(Window.Tabs) do
+        if OtherTab.UI and OtherTab.UI.Frame then
+            OtherTab.UI.Frame.Visible = OtherTab == Tab
+        end
+
+        if OtherTab.Button then
+            if OtherTab == Tab then
+                OtherTab.Button.TextColor3 = Window.ActivationColor
+            else
+                OtherTab.Button.TextColor3 = COLORS.White
+            end
+        end
+    end
+
+    if Window.ConfigUI and Window.ConfigUI.Frame then
+        Window.ConfigUI.Frame.Visible = false
+    end
+
+    Window.UI.ConfigButton.TextColor3 = COLORS.White
+end
+
+----------------------------------------------------------------
+-- ACTIVATE CONFIG
+----------------------------------------------------------------
+
+local function ActivateConfig(Window)
+    if Window.Destroyed then
+        return
+    end
+
+    Window.ActiveTab = nil
+
+    for _, Tab in ipairs(Window.Tabs) do
+        if Tab.UI and Tab.UI.Frame then
+            Tab.UI.Frame.Visible = false
+        end
+
+        if Tab.Button then
+            Tab.Button.TextColor3 = COLORS.White
+        end
+    end
+
+    if Window.ConfigUI and Window.ConfigUI.Frame then
+        Window.ConfigUI.Frame.Visible = true
+    end
+
+    Window.UI.ConfigButton.TextColor3 = Window.ActivationColor
+end
+
+----------------------------------------------------------------
+-- CREATE WINDOW
+----------------------------------------------------------------
 
 local function CreateWindowObject(Settings)
     Settings = Settings or {}
 
     local Window = {
         Name = Settings.Name or "DINGOSQUAD",
-        ActivationColor = Settings.ActivationColor
-            or Color3.fromRGB(150, 8, 34),
+
+        ActivationColor =
+            Settings.ActivationColor
+            or DEFAULT_ACTIVATION_COLOR,
 
         Tabs = {},
+
         Controls = {},
+
+        State = {},
+
+        Connections = {},
+
+        Destroyed = false,
+
+        ActiveTab = nil,
+
+        NextTabID = 0,
     }
+
+    ----------------------------------------------------------------
+    -- CREATE UI
+    ----------------------------------------------------------------
+
+    CreateWindowUI(Window)
+
+    CreateConfigFrame(Window)
+
+    ----------------------------------------------------------------
+    -- CONFIG BUTTON
+    ----------------------------------------------------------------
+
+    table.insert(
+        Window.Connections,
+        Window.UI.ConfigButton.MouseButton1Click:Connect(function()
+            ActivateConfig(Window)
+        end)
+    )
+
+    ----------------------------------------------------------------
+    -- CREATE TAB
+    ----------------------------------------------------------------
 
     function Window:CreateTab(Name)
         assert(
@@ -20,21 +809,335 @@ local function CreateWindowObject(Settings)
             "DINGOSQUAD: Tab name must be a non-empty string"
         )
 
+        assert(
+            not self.Destroyed,
+            "DINGOSQUAD: Cannot create a tab on a destroyed window"
+        )
+
+        -- Prevent duplicate tab names.
+        for _, ExistingTab in ipairs(self.Tabs) do
+            if ExistingTab.Name:lower() == Name:lower() then
+                error(
+                    "DINGOSQUAD: A tab named '" .. Name .. "' already exists",
+                    2
+                )
+            end
+        end
+
+        self.NextTabID += 1
+
         local Tab = {
+            ID = self.NextTabID,
+
             Name = Name,
+
+            Window = self,
+
             Controls = {},
+
+            Connections = {},
+
+            Destroyed = false,
         }
 
+        ----------------------------------------------------------------
+        -- BUTTON
+        ----------------------------------------------------------------
+
+        Tab.Button = CreateTabButton(
+            self.UI.DynamicTabContainer,
+            Name
+        )
+
+        ----------------------------------------------------------------
+        -- FRAME
+        ----------------------------------------------------------------
+
+        CreateTabFrame(self, Tab)
+
+        ----------------------------------------------------------------
+        -- BUTTON CLICK
+        ----------------------------------------------------------------
+
+        table.insert(
+            Tab.Connections,
+            Tab.Button.MouseButton1Click:Connect(function()
+                ActivateTab(self, Tab)
+            end)
+        )
+
+        ----------------------------------------------------------------
+        -- ADD TO REGISTRY
+        ----------------------------------------------------------------
+
         table.insert(self.Tabs, Tab)
+
+        self.State.Tabs[Tab.ID] = {
+            Name = Name,
+        }
+
+        UpdateTabButtons(self)
+
+        ----------------------------------------------------------------
+        -- FIRST TAB AUTOMATICALLY OPENS
+        ----------------------------------------------------------------
+
+        if not self.ActiveTab then
+            ActivateTab(self, Tab)
+        end
 
         return Tab
     end
 
+    ----------------------------------------------------------------
+    -- GET TAB
+    ----------------------------------------------------------------
+
+    function Window:GetTab(Name)
+        if type(Name) ~= "string" then
+            return nil
+        end
+
+        for _, Tab in ipairs(self.Tabs) do
+            if Tab.Name:lower() == Name:lower() then
+                return Tab
+            end
+        end
+
+        return nil
+    end
+
+    ----------------------------------------------------------------
+    -- ACTIVATE TAB
+    ----------------------------------------------------------------
+
+    function Window:SelectTab(Name)
+        local Tab
+
+        if type(Name) == "table" then
+            Tab = Name
+        else
+            Tab = self:GetTab(Name)
+        end
+
+        if not Tab then
+            return false
+        end
+
+        ActivateTab(self, Tab)
+
+        return true
+    end
+
+    ----------------------------------------------------------------
+    -- TAB COUNT
+    ----------------------------------------------------------------
+
+    function Window:GetTabCount()
+        return #self.Tabs
+    end
+
+    ----------------------------------------------------------------
+    -- SET ACTIVATION COLOR
+    ----------------------------------------------------------------
+
+    function Window:SetActivationColor(Color)
+        assert(
+            typeof(Color) == "Color3",
+            "DINGOSQUAD: ActivationColor must be a Color3"
+        )
+
+        self.ActivationColor = Color
+
+        if self.ActiveTab then
+            self.ActiveTab.Button.TextColor3 = Color
+        end
+
+        if self.ConfigUI.Frame.Visible then
+            self.UI.ConfigButton.TextColor3 = Color
+        end
+    end
+
+    ----------------------------------------------------------------
+    -- DESTROY TAB
+    ----------------------------------------------------------------
+
+    function Window:DestroyTab(TabOrName)
+        local Tab
+
+        if type(TabOrName) == "string" then
+            Tab = self:GetTab(TabOrName)
+        elseif type(TabOrName) == "table" then
+            Tab = TabOrName
+        end
+
+        if not Tab or Tab.Destroyed then
+            return false
+        end
+
+        if Tab.Window ~= self then
+            return false
+        end
+
+        -- Disconnect tab connections.
+        DisconnectConnections(Tab.Connections)
+
+        -- Destroy controls belonging to the tab.
+        for _, Control in ipairs(Tab.Controls) do
+            if Control.Destroy then
+                pcall(function()
+                    Control:Destroy()
+                end)
+            end
+        end
+
+        table.clear(Tab.Controls)
+
+        -- Destroy UI.
+        if Tab.Button then
+            Tab.Button:Destroy()
+            Tab.Button = nil
+        end
+
+        if Tab.UI and Tab.UI.Frame then
+            Tab.UI.Frame:Destroy()
+        end
+
+        Tab.Destroyed = true
+
+        -- Remove from tabs array.
+        for Index, ExistingTab in ipairs(self.Tabs) do
+            if ExistingTab == Tab then
+                table.remove(self.Tabs, Index)
+                break
+            end
+        end
+
+        self.State.Tabs[Tab.ID] = nil
+
+        UpdateTabButtons(self)
+
+        -- Pick another tab if the destroyed one was active.
+        if self.ActiveTab == Tab then
+            self.ActiveTab = nil
+
+            local NewTab = self.Tabs[1]
+
+            if NewTab then
+                ActivateTab(self, NewTab)
+            else
+                ActivateConfig(self)
+            end
+        end
+
+        return true
+    end
+
+    ----------------------------------------------------------------
+    -- GET STATE
+    ----------------------------------------------------------------
+
+    function Window:GetState()
+        return self.State
+    end
+
+    ----------------------------------------------------------------
+    -- DESTROY WINDOW
+    ----------------------------------------------------------------
+
+    function Window:Destroy()
+        if self.Destroyed then
+            return
+        end
+
+        self.Destroyed = true
+
+        ----------------------------------------------------------------
+        -- Destroy tabs
+        ----------------------------------------------------------------
+
+        for _, Tab in ipairs(self.Tabs) do
+            Tab.Destroyed = true
+
+            DisconnectConnections(Tab.Connections)
+
+            for _, Control in ipairs(Tab.Controls) do
+                if Control.Destroy then
+                    pcall(function()
+                        Control:Destroy()
+                    end)
+                end
+            end
+
+            table.clear(Tab.Controls)
+        end
+
+        table.clear(self.Tabs)
+
+        ----------------------------------------------------------------
+        -- Disconnect window connections
+        ----------------------------------------------------------------
+
+        DisconnectConnections(self.Connections)
+
+        ----------------------------------------------------------------
+        -- Destroy UI
+        ----------------------------------------------------------------
+
+        if self.UI and self.UI.ScreenGui then
+            self.UI.ScreenGui:Destroy()
+        end
+
+        ----------------------------------------------------------------
+        -- Remove from Library
+        ----------------------------------------------------------------
+
+        for Index, ExistingWindow in ipairs(Library.Windows) do
+            if ExistingWindow == self then
+                table.remove(Library.Windows, Index)
+                break
+            end
+        end
+
+        table.clear(self.Controls)
+        table.clear(self.State)
+    end
+
+    ----------------------------------------------------------------
+    -- STORE WINDOW
+    ----------------------------------------------------------------
+
+    table.insert(Library.Windows, Window)
+
     return Window
 end
 
+----------------------------------------------------------------
+-- PUBLIC API
+----------------------------------------------------------------
+
 function Library:CreateWindow(Settings)
     return CreateWindowObject(Settings)
+end
+
+----------------------------------------------------------------
+-- GET WINDOWS
+----------------------------------------------------------------
+
+function Library:GetWindows()
+    return self.Windows
+end
+
+----------------------------------------------------------------
+-- DESTROY ALL WINDOWS
+----------------------------------------------------------------
+
+function Library:DestroyAll()
+    for _, Window in ipairs(table.clone(self.Windows)) do
+        if Window and Window.Destroy then
+            Window:Destroy()
+        end
+    end
 end
 
 return Library
