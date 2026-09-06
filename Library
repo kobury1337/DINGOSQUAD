@@ -43,8 +43,8 @@ local COLORS = {
 }
 
 local FONTS = {
-    Main = Enum.Font.Inconsolata,
-    Control = Enum.Font.SourceSansPro,
+    Main = Enum.Font.Code,
+    Control = Enum.Font.SourceSans,
 }
 
 ----------------------------------------------------------------
