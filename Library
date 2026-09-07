@@ -11,7 +11,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local Library = {}
-Library.Version = "0.2.2"
+Library.Version = "0.2.3"
 Library.Windows = {}
 
 local DEFAULT_ACTIVATION_COLOR = Color3.fromRGB(150, 8, 34)
@@ -34,21 +34,16 @@ local FONTS = {
 
 local function Create(ClassName, Properties)
     local Object = Instance.new(ClassName)
-
     for Property, Value in pairs(Properties or {}) do
         Object[Property] = Value
     end
-
     return Object
 end
 
 local function DisconnectAll(Connections)
     for _, Connection in ipairs(Connections) do
-        if Connection then
-            Connection:Disconnect()
-        end
+        if Connection then Connection:Disconnect() end
     end
-
     table.clear(Connections)
 end
 
@@ -56,321 +51,172 @@ local function RegisterControl(Window, Tab, Control)
     Window.NextControlID += 1
     Control.ID = Window.NextControlID
     Control.Destroyed = false
-
     Window.Controls[Control.ID] = Control
     Tab.Controls[Control.ID] = Control
-
     return Control
 end
 
 local function CreateWindowUI(Window)
     local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-
     local ScreenGui = Create("ScreenGui", {
         Name = "DINGOSQUAD_" .. tostring(math.random(100000, 999999)),
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         Parent = PlayerGui,
     })
-
     Window.ScreenGui = ScreenGui
 
     local MainFrame = Create("Frame", {
-        Name = "MainFrame",
-        BackgroundColor3 = COLORS.MainBackground,
-        BorderSizePixel = 6,
-        BorderColor3 = COLORS.Border,
+        Name = "MainFrame", BackgroundColor3 = COLORS.MainBackground,
+        BorderSizePixel = 6, BorderColor3 = COLORS.Border,
         Size = UDim2.new(0, 674, 0, 561),
-        Position = UDim2.new(0.21533, 0, 0.03538, 0),
-        Parent = ScreenGui,
+        Position = UDim2.new(0.21533, 0, 0.03538, 0), Parent = ScreenGui,
     })
-
     Window.MainFrame = MainFrame
-
-    Create("UIStroke", {
-        Thickness = 3.4,
-        Color = COLORS.Stroke,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-        LineJoinMode = Enum.LineJoinMode.Miter,
-        Parent = MainFrame,
-    })
+    Create("UIStroke", {Thickness = 3.4, Color = COLORS.Stroke, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, LineJoinMode = Enum.LineJoinMode.Miter, Parent = MainFrame})
 
     local TabList = Create("Frame", {
-        Name = "TabList",
-        BackgroundColor3 = COLORS.SecondaryBackground,
-        BorderSizePixel = 1,
-        BorderColor3 = COLORS.Border,
-        Size = UDim2.new(0, 86, 0, 517),
-        Position = UDim2.new(0.04748, 0, 0.03387, 0),
-        Parent = MainFrame,
+        Name = "TabList", BackgroundColor3 = COLORS.SecondaryBackground,
+        BorderSizePixel = 1, BorderColor3 = COLORS.Border,
+        Size = UDim2.new(0, 86, 0, 517), Position = UDim2.new(0.04748, 0, 0.03387, 0), Parent = MainFrame,
     })
-
     Window.TabList = TabList
 
     local DynamicTabContainer = Create("Frame", {
-        Name = "DynamicTabs",
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, -65),
-        Position = UDim2.new(0, 0, 0, 8),
-        Parent = TabList,
+        Name = "DynamicTabs", BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, -65), Position = UDim2.new(0, 0, 0, 8), Parent = TabList,
     })
-
     Window.DynamicTabContainer = DynamicTabContainer
-
-    Create("UIListLayout", {
-        FillDirection = Enum.FillDirection.Vertical,
-        HorizontalAlignment = Enum.HorizontalAlignment.Center,
-        VerticalAlignment = Enum.VerticalAlignment.Top,
-        Padding = UDim.new(0, 3),
-        Parent = DynamicTabContainer,
-    })
+    Create("UIListLayout", {FillDirection = Enum.FillDirection.Vertical, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Top, Padding = UDim.new(0, 3), Parent = DynamicTabContainer})
 
     local ConfigButton = Create("TextButton", {
-        Name = "config",
-        AutoButtonColor = false,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 86, 0, 24),
-        Position = UDim2.new(0, 0, 0.85687, 0),
-        Text = "config",
-        TextColor3 = COLORS.Text,
-        TextSize = 16,
-        Font = FONTS.Main,
-        Parent = TabList,
+        Name = "config", AutoButtonColor = false, BackgroundTransparency = 1, BorderSizePixel = 0,
+        Size = UDim2.new(0, 86, 0, 24), Position = UDim2.new(0, 0, 0.85687, 0),
+        Text = "config", TextColor3 = COLORS.Text, TextSize = 16, Font = FONTS.Main, Parent = TabList,
     })
-
     Window.ConfigButton = ConfigButton
 
     local ContentContainer = Create("Frame", {
-        Name = "ContentContainer",
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 480, 0, 517),
-        Position = UDim2.new(0.23591, 0, 0.03387, 0),
-        Parent = MainFrame,
+        Name = "ContentContainer", BackgroundTransparency = 1,
+        Size = UDim2.new(0, 480, 0, 517), Position = UDim2.new(0.23591, 0, 0.03387, 0), Parent = MainFrame,
     })
-
     Window.ContentContainer = ContentContainer
 
     local Keybinds = Create("Frame", {
-        Name = "Keybinds",
-        Visible = false,
-        BackgroundColor3 = COLORS.MainBackground,
-        BorderSizePixel = 6,
-        BorderColor3 = COLORS.Border,
-        Size = UDim2.new(0, 202, 0, 100),
-        Position = UDim2.new(0.80536, 0, 0.23692, 0),
-        Parent = ScreenGui,
+        Name = "Keybinds", Visible = false, BackgroundColor3 = COLORS.MainBackground,
+        BorderSizePixel = 6, BorderColor3 = COLORS.Border,
+        Size = UDim2.new(0, 202, 0, 100), Position = UDim2.new(0.80536, 0, 0.23692, 0), Parent = ScreenGui,
     })
-
     Window.Keybinds = Keybinds
+    Create("UIStroke", {Thickness = 3.4, Color = COLORS.Stroke, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, LineJoinMode = Enum.LineJoinMode.Miter, Parent = Keybinds})
 
-    Create("UIStroke", {
-        Thickness = 3.4,
-        Color = COLORS.Stroke,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-        LineJoinMode = Enum.LineJoinMode.Miter,
-        Parent = Keybinds,
+    Window.KeybindFrame = Create("Frame", {
+        Name = "KeybindFrame", BackgroundColor3 = Color3.fromRGB(27, 27, 27), BorderSizePixel = 0,
+        Size = UDim2.new(0, 160, 0, 61), Position = UDim2.new(0.10339, 0, 0.19, 0), Parent = Keybinds,
     })
-
-    local KeybindFrame = Create("Frame", {
-        Name = "KeybindFrame",
-        BackgroundColor3 = Color3.fromRGB(27, 27, 27),
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 160, 0, 61),
-        Position = UDim2.new(0.10339, 0, 0.19, 0),
-        Parent = Keybinds,
-    })
-
-    Window.KeybindFrame = KeybindFrame
 end
 
 local function CreateTabFrame(Window, Tab)
     local TabFrame = Create("Frame", {
-        Name = "TabFrame_" .. Tab.ID,
-        Visible = false,
-        BackgroundColor3 = COLORS.SecondaryBackground,
-        BorderSizePixel = 1,
-        BorderColor3 = COLORS.Border,
-        Size = UDim2.new(0, 480, 0, 517),
-        Position = UDim2.new(0, 0, 0, 0),
-        Parent = Window.ContentContainer,
+        Name = "TabFrame_" .. Tab.ID, Visible = false, BackgroundColor3 = COLORS.SecondaryBackground,
+        BorderSizePixel = 1, BorderColor3 = COLORS.Border,
+        Size = UDim2.new(0, 480, 0, 517), Position = UDim2.new(0, 0, 0, 0), Parent = Window.ContentContainer,
     })
-
     Tab.Frame = TabFrame
-
-    local ControlsContainer = Create("Frame", {
-        Name = "Controls",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 1, -35),
-        Position = UDim2.new(0, 0, 0, 0),
-        Parent = TabFrame,
+    Tab.ControlsContainer = Create("Frame", {
+        Name = "Controls", BackgroundTransparency = 1, BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 1, -35), Position = UDim2.new(0, 0, 0, 0), Parent = TabFrame,
     })
-
-    Tab.ControlsContainer = ControlsContainer
 end
 
 local function CreateButton(Tab, Settings)
     Settings = Settings or {}
-
     assert(type(Settings.Name) == "string" and Settings.Name ~= "", "DINGOSQUAD: Button name must be a non-empty string")
     assert(Settings.Callback == nil or type(Settings.Callback) == "function", "DINGOSQUAD: Button callback must be a function")
-
     local Window = Tab.Window
-    local Button = {
-        Name = Settings.Name,
-        Type = "Button",
-        Callback = Settings.Callback or function() end,
-        Connections = {},
-    }
-
+    local Button = {Name = Settings.Name, Type = "Button", Callback = Settings.Callback or function() end, Connections = {}}
     RegisterControl(Window, Tab, Button)
-
     local Index = #Tab.ControlOrder + 1
     local YOffset = 10 + ((Index - 1) * 34)
-
     local ButtonFrame = Create("TextButton", {
-        Name = "Button_" .. Button.ID,
-        AutoButtonColor = false,
-        BackgroundColor3 = COLORS.ControlBackground,
-        BorderSizePixel = 1,
-        BorderColor3 = COLORS.ControlBorder,
-        Size = UDim2.new(0, 126, 0, 17),
-        Position = UDim2.new(0, 28, 0, YOffset),
-        Text = Settings.Name,
-        TextColor3 = COLORS.Text,
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Font = FONTS.Main,
-        Parent = Tab.ControlsContainer,
+        Name = "Button_" .. Button.ID, AutoButtonColor = false,
+        BackgroundColor3 = COLORS.ControlBackground, BorderSizePixel = 1, BorderColor3 = COLORS.ControlBorder,
+        Size = UDim2.new(0, 126, 0, 17), Position = UDim2.new(0, 28, 0, YOffset),
+        Text = Settings.Name, TextColor3 = COLORS.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left,
+        Font = FONTS.Main, Parent = Tab.ControlsContainer,
     })
-
     Button.Frame = ButtonFrame
-
     Button.Connections[#Button.Connections + 1] = ButtonFrame.MouseButton1Click:Connect(function()
-        if Button.Destroyed then
-            return
-        end
-
+        if Button.Destroyed then return end
         local Success, ErrorMessage = pcall(Button.Callback)
-        if not Success then
-            warn("[DINGOSQUAD] Button callback error:", ErrorMessage)
-        end
+        if not Success then warn("[DINGOSQUAD] Button callback error:", ErrorMessage) end
     end)
-
     function Button:Destroy()
-        if self.Destroyed then
-            return
-        end
-
+        if self.Destroyed then return end
         self.Destroyed = true
         DisconnectAll(self.Connections)
-
-        if self.Frame then
-            self.Frame:Destroy()
-        end
-
+        if self.Frame then self.Frame:Destroy() end
         Window.Controls[self.ID] = nil
         Tab.Controls[self.ID] = nil
     end
-
     table.insert(Tab.ControlOrder, Button)
     return Button
 end
 
 local function CreateToggle(Tab, Settings)
     Settings = Settings or {}
-
     assert(type(Settings.Name) == "string" and Settings.Name ~= "", "DINGOSQUAD: Toggle name must be a non-empty string")
     assert(Settings.Callback == nil or type(Settings.Callback) == "function", "DINGOSQUAD: Toggle callback must be a function")
-
     local Window = Tab.Window
     local Toggle = {
-        Name = Settings.Name,
-        Type = "Toggle",
-        Value = Settings.Default == true,
-        Callback = Settings.Callback or function() end,
-        Keybind = nil,
-        KeybindMode = "TOGGLE",
-        Connections = {},
+        Name = Settings.Name, Type = "Toggle", Value = Settings.Default == true,
+        Callback = Settings.Callback or function() end, Keybind = nil, KeybindMode = "TOGGLE", Connections = {},
     }
-
     RegisterControl(Window, Tab, Toggle)
-
     local Index = #Tab.ControlOrder + 1
     local YOffset = 10 + ((Index - 1) * 34)
 
     local ToggleButton = Create("TextButton", {
-        Name = "ToggleButton",
-        AutoButtonColor = false,
-        BackgroundColor3 = COLORS.ToggleOff,
-        BorderSizePixel = 0,
-        BorderColor3 = COLORS.ControlBorder,
-        ClipsDescendants = false,
-        Size = UDim2.new(0, 11, 0, 18),
-        Position = UDim2.new(0.05833, 0, 0, YOffset),
-        Text = "",
+        Name = "ToggleButton", AutoButtonColor = false, BackgroundColor3 = COLORS.ToggleOff,
+        BorderSizePixel = 0, BorderColor3 = COLORS.ControlBorder, ClipsDescendants = false,
+        Size = UDim2.new(0, 11, 0, 18), Position = UDim2.new(0.05833, 0, 0, YOffset), Text = "",
         Parent = Tab.ControlsContainer,
     })
-
     Toggle.Frame = ToggleButton
     Toggle.ToggleButton = ToggleButton
 
+    -- The original ScreenGui uses an aspect-ratio constraint on the toggle.
+    -- Height is the dominant axis so the control stays 11x18 even if its
+    -- parent/layout attempts to resize it.
     Create("UIAspectRatioConstraint", {
+        Name = "UIAspectRatioConstraint",
         AspectRatio = 11 / 18,
+        DominantAxis = Enum.DominantAxis.Height,
         Parent = ToggleButton,
     })
 
     local Title = Create("TextLabel", {
-        Name = "Title",
-        TextStrokeTransparency = 0,
-        BorderSizePixel = 0,
-        TextSize = 14,
-        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-        TextColor3 = COLORS.Text,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 70, 0, 13),
-        Text = Settings.Name,
-        Position = UDim2.new(3.45455, 0, -0.09091, 0),
-        Font = FONTS.Main,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        ZIndex = ToggleButton.ZIndex + 1,
-        Parent = ToggleButton,
+        Name = "Title", TextStrokeTransparency = 0, BorderSizePixel = 0, TextSize = 14,
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = COLORS.Text, BackgroundTransparency = 1,
+        Size = UDim2.new(0, 70, 0, 13), Text = Settings.Name, Position = UDim2.new(3.45455, 0, -0.09091, 0),
+        Font = FONTS.Main, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center,
+        ZIndex = ToggleButton.ZIndex + 1, Parent = ToggleButton,
     })
-
     Toggle.Title = Title
 
     local Bind = Create("TextButton", {
-        Name = "Bind",
-        AutoButtonColor = false,
-        BorderSizePixel = 0,
-        TextSize = 14,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 61, 0, 13),
-        Text = "[-]",
-        Position = UDim2.new(10.81818, 0, -0.09091, 0),
-        TextColor3 = COLORS.Text,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        Font = FONTS.Main,
-        ZIndex = ToggleButton.ZIndex + 2,
-        Parent = ToggleButton,
+        Name = "Bind", AutoButtonColor = false, BorderSizePixel = 0, TextSize = 14, BackgroundTransparency = 1,
+        Size = UDim2.new(0, 61, 0, 13), Text = "[-]", Position = UDim2.new(10.81818, 0, -0.09091, 0),
+        TextColor3 = COLORS.Text, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center,
+        Font = FONTS.Main, ZIndex = ToggleButton.ZIndex + 2, Parent = ToggleButton,
     })
-
     Toggle.BindButton = Bind
 
     local BindOptions = Create("Frame", {
-        Name = "BindOptions",
-        Visible = false,
-        BorderSizePixel = 0,
-        BackgroundColor3 = Color3.fromRGB(19, 19, 19),
-        Size = UDim2.new(0, 88, 0, 77),
-        Position = UDim2.new(0.80328, 0, 0.07692, 0),
-        BorderColor3 = Color3.fromRGB(0, 0, 0),
-        Parent = Bind,
+        Name = "BindOptions", Visible = false, BorderSizePixel = 0,
+        BackgroundColor3 = Color3.fromRGB(19, 19, 19), Size = UDim2.new(0, 88, 0, 77),
+        Position = UDim2.new(0.80328, 0, 0.07692, 0), BorderColor3 = Color3.fromRGB(0, 0, 0), Parent = Bind,
     })
-
     Toggle.BindOptions = BindOptions
 
     local BindOptionData = {
@@ -378,182 +224,91 @@ local function CreateToggle(Tab, Settings)
         {Name = "TOGGLE", Position = UDim2.new(0.14391, 0, 0.41466, 0)},
         {Name = "HOLD", Position = UDim2.new(0.14391, 0, 0.7783, 0)},
     }
-
     for _, Option in ipairs(BindOptionData) do
         Create("TextButton", {
-            Name = Option.Name,
-            AutoButtonColor = false,
-            BorderSizePixel = 0,
-            BackgroundTransparency = 1,
-            Size = UDim2.new(0, 61, 0, 13),
-            Position = Option.Position,
-            Text = Option.Name,
-            TextColor3 = COLORS.Text,
-            TextSize = 14,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            TextYAlignment = Enum.TextYAlignment.Center,
-            Font = FONTS.Main,
-            Parent = BindOptions,
+            Name = Option.Name, AutoButtonColor = false, BorderSizePixel = 0, BackgroundTransparency = 1,
+            Size = UDim2.new(0, 61, 0, 13), Position = Option.Position, Text = Option.Name,
+            TextColor3 = COLORS.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Center, Font = FONTS.Main, Parent = BindOptions,
         })
     end
 
-    local ColorPicker
     if Settings.ColorPicker == true then
-        ColorPicker = Create("TextButton", {
-            Name = "ColorPicker",
-            AutoButtonColor = false,
-            BorderSizePixel = 0,
-            TextSize = 14,
-            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-            TextColor3 = Color3.fromRGB(0, 0, 0),
-            Size = UDim2.new(0, 43, 0, 18),
-            Text = "",
-            Position = UDim2.new(16.36364, 0, -0.36364, 0),
-            BorderColor3 = Color3.fromRGB(0, 0, 0),
-            Font = FONTS.Control,
-            Parent = ToggleButton,
+        Toggle.ColorPicker = Create("TextButton", {
+            Name = "ColorPicker", AutoButtonColor = false, BorderSizePixel = 0, TextSize = 14,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0),
+            Size = UDim2.new(0, 43, 0, 18), Text = "", Position = UDim2.new(16.36364, 0, -0.36364, 0),
+            BorderColor3 = Color3.fromRGB(0, 0, 0), Font = FONTS.Control, Parent = ToggleButton,
         })
-
-        Toggle.ColorPicker = ColorPicker
     end
 
     local function UpdateVisual()
         ToggleButton.BackgroundColor3 = Toggle.Value and Window.ActivationColor or COLORS.ToggleOff
     end
-
     UpdateVisual()
 
     local function FireCallback()
         local Success, ErrorMessage = pcall(Toggle.Callback, Toggle.Value)
-        if not Success then
-            warn("[DINGOSQUAD] Toggle callback error:", ErrorMessage)
-        end
+        if not Success then warn("[DINGOSQUAD] Toggle callback error:", ErrorMessage) end
     end
-
     function Toggle:SetValue(Value, Fire)
-        if self.Destroyed then
-            return
-        end
-
+        if self.Destroyed then return end
         self.Value = Value == true
         UpdateVisual()
-
-        if Fire ~= false then
-            FireCallback()
-        end
+        if Fire ~= false then FireCallback() end
     end
-
-    function Toggle:GetValue()
-        return self.Value
-    end
-
+    function Toggle:GetValue() return self.Value end
     function Toggle:SetKeybind(Key, Mode)
         if Key ~= nil then
             assert(typeof(Key) == "EnumItem" and Key.EnumType == Enum.KeyCode, "DINGOSQUAD: Keybind must be an Enum.KeyCode or nil")
         end
-
         self.Keybind = Key
         self.KeybindMode = Mode or "TOGGLE"
-
-        if Key then
-            Bind.Text = "[" .. Key.Name .. "]"
-        else
-            Bind.Text = "[-]"
-        end
+        Bind.Text = Key and ("[" .. Key.Name .. "]") or "[-]"
     end
-
-    function Toggle:GetKeybind()
-        return self.Keybind, self.KeybindMode
-    end
+    function Toggle:GetKeybind() return self.Keybind, self.KeybindMode end
 
     Toggle.Connections[#Toggle.Connections + 1] = ToggleButton.MouseButton1Click:Connect(function()
         Toggle:SetValue(not Toggle.Value)
     end)
-
     function Toggle:Destroy()
-        if self.Destroyed then
-            return
-        end
-
+        if self.Destroyed then return end
         self.Destroyed = true
         DisconnectAll(self.Connections)
-
-        if self.Frame then
-            self.Frame:Destroy()
-        end
-
+        if self.Frame then self.Frame:Destroy() end
         Window.Controls[self.ID] = nil
         Tab.Controls[self.ID] = nil
     end
-
     table.insert(Tab.ControlOrder, Toggle)
     return Toggle
 end
 
 local function CreateTabObject(Window, Name)
     Window.NextTabID += 1
-
-    return {
-        ID = Window.NextTabID,
-        Name = Name,
-        Window = Window,
-        Frame = nil,
-        Button = nil,
-        Controls = {},
-        ControlOrder = {},
-        Connections = {},
-        Destroyed = false,
-    }
+    return {ID = Window.NextTabID, Name = Name, Window = Window, Frame = nil, Button = nil, Controls = {}, ControlOrder = {}, Connections = {}, Destroyed = false}
 end
 
 local function AddTabAPI(Tab)
-    function Tab:CreateButton(Settings)
-        return CreateButton(self, Settings)
-    end
-
-    function Tab:CreateToggle(Settings)
-        return CreateToggle(self, Settings)
-    end
-
+    function Tab:CreateButton(Settings) return CreateButton(self, Settings) end
+    function Tab:CreateToggle(Settings) return CreateToggle(self, Settings) end
     return Tab
 end
 
 local function CreateWindowObject(Settings)
     Settings = Settings or {}
-
     local Window = {
-        Name = Settings.Name or "DINGOSQUAD",
-        ActivationColor = Settings.ActivationColor or DEFAULT_ACTIVATION_COLOR,
-        Tabs = {},
-        Controls = {},
-        State = {
-            Tabs = {},
-            Controls = {},
-        },
-        Connections = {},
-        Destroyed = false,
-        ActiveTab = nil,
-        NextTabID = 0,
-        NextControlID = 0,
+        Name = Settings.Name or "DINGOSQUAD", ActivationColor = Settings.ActivationColor or DEFAULT_ACTIVATION_COLOR,
+        Tabs = {}, Controls = {}, State = {Tabs = {}, Controls = {}}, Connections = {}, Destroyed = false,
+        ActiveTab = nil, NextTabID = 0, NextControlID = 0,
     }
-
     CreateWindowUI(Window)
 
     function Window:SelectTab(Tab)
-        if self.Destroyed or not Tab or Tab.Destroyed then
-            return
-        end
-
+        if self.Destroyed or not Tab or Tab.Destroyed then return end
         if self.ActiveTab then
-            if self.ActiveTab.Frame then
-                self.ActiveTab.Frame.Visible = false
-            end
-
-            if self.ActiveTab.Button then
-                self.ActiveTab.Button.TextColor3 = COLORS.Text
-            end
+            if self.ActiveTab.Frame then self.ActiveTab.Frame.Visible = false end
+            if self.ActiveTab.Button then self.ActiveTab.Button.TextColor3 = COLORS.Text end
         end
-
         self.ActiveTab = Tab
         Tab.Frame.Visible = true
         Tab.Button.TextColor3 = self.ActivationColor
@@ -561,156 +316,73 @@ local function CreateWindowObject(Settings)
 
     function Window:CreateTab(Name)
         assert(type(Name) == "string" and Name ~= "", "DINGOSQUAD: Tab name must be a non-empty string")
-
         for _, ExistingTab in ipairs(self.Tabs) do
-            if ExistingTab.Name == Name then
-                error("DINGOSQUAD: A tab named '" .. Name .. "' already exists")
-            end
+            if ExistingTab.Name == Name then error("DINGOSQUAD: A tab named '" .. Name .. "' already exists") end
         end
-
         local Tab = AddTabAPI(CreateTabObject(self, Name))
         CreateTabFrame(self, Tab)
-
         local TabButton = Create("TextButton", {
-            Name = "Tab_" .. Tab.ID,
-            AutoButtonColor = false,
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            Size = UDim2.new(0, 86, 0, 24),
-            Text = Name,
-            TextColor3 = COLORS.Text,
-            TextSize = 16,
-            Font = FONTS.Main,
-            Parent = self.DynamicTabContainer,
+            Name = "Tab_" .. Tab.ID, AutoButtonColor = false, BackgroundTransparency = 1, BorderSizePixel = 0,
+            Size = UDim2.new(0, 86, 0, 24), Text = Name, TextColor3 = COLORS.Text, TextSize = 16,
+            Font = FONTS.Main, Parent = self.DynamicTabContainer,
         })
-
         Tab.Button = TabButton
-
-        Tab.Connections[#Tab.Connections + 1] = TabButton.MouseButton1Click:Connect(function()
-            self:SelectTab(Tab)
-        end)
-
+        Tab.Connections[#Tab.Connections + 1] = TabButton.MouseButton1Click:Connect(function() self:SelectTab(Tab) end)
         table.insert(self.Tabs, Tab)
         self.State.Tabs[Tab.ID] = {Name = Tab.Name}
-
-        if #self.Tabs == 1 then
-            self:SelectTab(Tab)
-        end
-
+        if #self.Tabs == 1 then self:SelectTab(Tab) end
         return Tab
     end
 
     function Window:GetTab(Name)
-        for _, Tab in ipairs(self.Tabs) do
-            if Tab.Name == Name then
-                return Tab
-            end
-        end
-
+        for _, Tab in ipairs(self.Tabs) do if Tab.Name == Name then return Tab end end
         return nil
     end
-
     function Window:SetActivationColor(Color)
         assert(typeof(Color) == "Color3", "DINGOSQUAD: ActivationColor must be a Color3")
-
         self.ActivationColor = Color
-
-        if self.ActiveTab and self.ActiveTab.Button then
-            self.ActiveTab.Button.TextColor3 = Color
-        end
-
+        if self.ActiveTab and self.ActiveTab.Button then self.ActiveTab.Button.TextColor3 = Color end
         for _, Control in pairs(self.Controls) do
-            if Control.Type == "Toggle" and Control.ToggleButton and Control.Value then
-                Control.ToggleButton.BackgroundColor3 = Color
-            end
+            if Control.Type == "Toggle" and Control.ToggleButton and Control.Value then Control.ToggleButton.BackgroundColor3 = Color end
         end
     end
-
-    function Window:GetTabCount()
-        return #self.Tabs
-    end
-
+    function Window:GetTabCount() return #self.Tabs end
     function Window:DestroyTab(Tab)
-        if not Tab or Tab.Destroyed then
-            return
-        end
-
+        if not Tab or Tab.Destroyed then return end
         local Controls = {}
-        for _, Control in pairs(Tab.Controls) do
-            table.insert(Controls, Control)
-        end
-
-        for _, Control in ipairs(Controls) do
-            Control:Destroy()
-        end
-
+        for _, Control in pairs(Tab.Controls) do table.insert(Controls, Control) end
+        for _, Control in ipairs(Controls) do Control:Destroy() end
         Tab.Destroyed = true
         DisconnectAll(Tab.Connections)
-
-        if Tab.Button then
-            Tab.Button:Destroy()
-        end
-
-        if Tab.Frame then
-            Tab.Frame:Destroy()
-        end
-
+        if Tab.Button then Tab.Button:Destroy() end
+        if Tab.Frame then Tab.Frame:Destroy() end
         self.State.Tabs[Tab.ID] = nil
-
         for Index, ExistingTab in ipairs(self.Tabs) do
-            if ExistingTab == Tab then
-                table.remove(self.Tabs, Index)
-                break
-            end
+            if ExistingTab == Tab then table.remove(self.Tabs, Index) break end
         end
-
         if self.ActiveTab == Tab then
             self.ActiveTab = nil
-
-            if self.Tabs[1] then
-                self:SelectTab(self.Tabs[1])
-            end
+            if self.Tabs[1] then self:SelectTab(self.Tabs[1]) end
         end
     end
-
-    function Window:GetState()
-        return self.State
-    end
-
+    function Window:GetState() return self.State end
     function Window:Destroy()
-        if self.Destroyed then
-            return
-        end
-
+        if self.Destroyed then return end
         local Tabs = table.clone(self.Tabs)
-
         self.Destroyed = true
-
         for _, Tab in ipairs(Tabs) do
             local Controls = {}
-            for _, Control in pairs(Tab.Controls) do
-                table.insert(Controls, Control)
-            end
-
-            for _, Control in ipairs(Controls) do
-                Control:Destroy()
-            end
-
+            for _, Control in pairs(Tab.Controls) do table.insert(Controls, Control) end
+            for _, Control in ipairs(Controls) do Control:Destroy() end
             DisconnectAll(Tab.Connections)
         end
-
         DisconnectAll(self.Connections)
-
-        if self.ScreenGui then
-            self.ScreenGui:Destroy()
-        end
-
+        if self.ScreenGui then self.ScreenGui:Destroy() end
         table.clear(self.Tabs)
         table.clear(self.Controls)
         table.clear(self.State.Tabs)
         table.clear(self.State.Controls)
     end
-
     return Window
 end
 
@@ -719,19 +391,10 @@ function Library:CreateWindow(Settings)
     table.insert(self.Windows, Window)
     return Window
 end
-
-function Library:GetWindows()
-    return self.Windows
-end
-
+function Library:GetWindows() return self.Windows end
 function Library:DestroyAll()
     local Windows = table.clone(self.Windows)
-
-    for _, Window in ipairs(Windows) do
-        Window:Destroy()
-    end
-
+    for _, Window in ipairs(Windows) do Window:Destroy() end
     table.clear(self.Windows)
 end
-
 return Library
