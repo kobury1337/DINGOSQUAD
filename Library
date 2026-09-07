@@ -1,14 +1,14 @@
 --[[
     DINGOSQUAD
-    Stage 2.7
-    Label control
+    Stage 2.8
+    Keybind control
 ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
-local Library = {Version = "0.2.7", Windows = {}}
+local Library = {Version = "0.2.8", Windows = {}}
 local DEFAULT_ACTIVATION_COLOR = Color3.fromRGB(150, 8, 34)
 local COLORS = {
     MainBackground = Color3.fromRGB(4,4,4), SecondaryBackground = Color3.fromRGB(9,9,9),
@@ -126,15 +126,51 @@ local function CreateTextbox(T,S)
 end
 
 local function CreateLabel(T,S)
-    S=S or {}
-    assert(type(S.Text)=="string","DINGOSQUAD: Label Text must be a string")
-    local W=T.Window
-    local B=Register(W,T,{Name=S.Text,Type="Label",Value=S.Text,Connections={}})
+    S=S or {};assert(type(S.Text)=="string","DINGOSQUAD: Label Text must be a string")
+    local W=T.Window;local B=Register(W,T,{Name=S.Text,Type="Label",Value=S.Text,Connections={}})
     B.Frame=Create("TextLabel",{Name="Label_"..B.ID,BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(0,180,0,20),Position=UDim2.new(0,28,0,Y(T)),Text=S.Text,TextColor3=COLORS.Text,TextSize=S.TextSize or 14,Font=FONTS.Main,TextXAlignment=S.TextXAlignment or Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Center,Parent=T.ControlsContainer})
     function B:SetText(V)if self.Destroyed then return end;assert(type(V)=="string","DINGOSQUAD: Label text must be a string");self.Value=V;self.Name=V;self.Frame.Text=V end
     function B:GetText()return self.Value end
     function B:Destroy()if self.Destroyed then return end self.Destroyed=true;DisconnectAll(self.Connections);self.Frame:Destroy();W.Controls[self.ID]=nil;T.Controls[self.ID]=nil end
     table.insert(T.ControlOrder,B);return B
+end
+
+local function CreateKeybind(T,S)
+    S=S or {};assert(type(S.Name)=="string" and S.Name~="","DINGOSQUAD: Keybind name must be a non-empty string");assert(S.Callback==nil or type(S.Callback)=="function","DINGOSQUAD: Keybind callback must be a function");assert(S.Default==nil or typeof(S.Default)=="EnumItem" and S.Default.EnumType==Enum.KeyCode,"DINGOSQUAD: Keybind Default must be an Enum.KeyCode")
+    local W=T.Window
+    local B=Register(W,T,{Name=S.Name,Type="Keybind",Key=S.Default,Mode=S.Mode or "Toggle",Active=false,Listening=false,Callback=S.Callback or function() end,Connections={}})
+    B.Frame=Create("Frame",{Name="Keybind_"..B.ID,BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(0,250,0,22),Position=UDim2.new(0,28,0,Y(T)),Parent=T.ControlsContainer})
+    B.Title=Create("TextLabel",{Name="Title",BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(0,145,0,20),Text=S.Name,TextColor3=COLORS.Text,TextSize=14,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Center,Parent=B.Frame})
+    B.Button=Create("TextButton",{Name="Button",AutoButtonColor=false,BackgroundColor3=COLORS.ControlBackground,BorderSizePixel=1,BorderColor3=COLORS.ControlBorder,Size=UDim2.new(0,100,0,20),Position=UDim2.new(0,150,0,0),Text=B.Key and ("["..B.Key.Name.."]") or "[-]",TextColor3=COLORS.Text,TextSize=13,Font=FONTS.Main,Parent=B.Frame})
+    local function Visual()B.Button.Text=B.Listening and "[...]" or (B.Key and ("["..B.Key.Name.."]") or "[-]");B.Button.BackgroundColor3=B.Active and W.ActivationColor or COLORS.ControlBackground end
+    local function Fire()local ok,e=pcall(B.Callback,B.Active,B.Key);if not ok then warn("[DINGOSQUAD] Keybind callback error:",e)end end
+    local function SetActive(V,FireCallback)B.Active=V==true;Visual();if FireCallback then Fire()end end
+    function B:SetKey(K)if K~=nil then assert(typeof(K)=="EnumItem" and K.EnumType==Enum.KeyCode,"DINGOSQUAD: Keybind must be an Enum.KeyCode or nil")end;self.Key=K;self.Listening=false;Visual()end
+    function B:GetKey()return self.Key end
+    function B:SetMode(M)assert(M=="Toggle" or M=="Hold" or M=="Always","DINGOSQUAD: Keybind mode must be Toggle, Hold, or Always");self.Mode=M;if M=="Always" then SetActive(true,false)elseif M~="Hold" then SetActive(false,false)end;end
+    function B:GetMode()return self.Mode end
+    function B:SetActive(V,F)SetActive(V,F~=false)end
+    function B:GetActive()return self.Active end
+    function B:Clear()self:SetKey(nil);self:SetActive(false,false)end
+    B.Connections[#B.Connections+1]=B.Button.MouseButton1Click:Connect(function()B.Listening=true;Visual()end)
+    B.Connections[#B.Connections+1]=UserInputService.InputBegan:Connect(function(I,Processed)
+        if B.Destroyed or Processed then return end
+        if B.Listening then
+            if I.KeyCode==Enum.KeyCode.Escape then B.Listening=false;Visual();return end
+            if I.KeyCode~=Enum.KeyCode.Unknown then B:SetKey(I.KeyCode) end
+            return
+        end
+        if B.Key and I.KeyCode==B.Key then
+            if B.Mode=="Toggle" then SetActive(not B.Active,true) elseif B.Mode=="Hold" then SetActive(true,true) end
+        end
+    end)
+    B.Connections[#B.Connections+1]=UserInputService.InputEnded:Connect(function(I)
+        if B.Destroyed or B.Listening then return end
+        if B.Key and I.KeyCode==B.Key and B.Mode=="Hold" then SetActive(false,true) end
+    end)
+    function B:Destroy()if self.Destroyed then return end self.Destroyed=true;DisconnectAll(self.Connections);self.Frame:Destroy();W.Controls[self.ID]=nil;T.Controls[self.ID]=nil end
+    if B.Mode=="Always" then B.Active=true end
+    Visual();table.insert(T.ControlOrder,B);return B
 end
 
 local function NewTab(W,Name)
@@ -147,6 +183,7 @@ local function API(T)
     function T:CreateDropdown(S)return CreateDropdown(self,S)end
     function T:CreateTextbox(S)return CreateTextbox(self,S)end
     function T:CreateLabel(S)return CreateLabel(self,S)end
+    function T:CreateKeybind(S)return CreateKeybind(self,S)end
     return T
 end
 
@@ -155,7 +192,7 @@ local function NewWindow(S)
     function W:SelectTab(T)if self.Destroyed or not T or T.Destroyed then return end;if self.ActiveTab then self.ActiveTab.Frame.Visible=false;self.ActiveTab.Button.TextColor3=COLORS.Text end;self.ActiveTab=T;T.Frame.Visible=true;T.Button.TextColor3=self.ActivationColor end
     function W:CreateTab(Name)assert(type(Name)=="string" and Name~="","DINGOSQUAD: Tab name must be a non-empty string");local T=API(NewTab(self,Name));CreateTabFrame(self,T);T.Button=Create("TextButton",{Name="Tab_"..T.ID,AutoButtonColor=false,BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(0,86,0,24),Text=Name,TextColor3=COLORS.Text,TextSize=16,Font=FONTS.Main,Parent=self.DynamicTabContainer});T.Connections[#T.Connections+1]=T.Button.MouseButton1Click:Connect(function()self:SelectTab(T)end);table.insert(self.Tabs,T);self.State.Tabs[T.ID]={Name=T.Name};if #self.Tabs==1 then self:SelectTab(T)end;return T end
     function W:GetTab(Name)for _,T in ipairs(self.Tabs)do if T.Name==Name then return T end end end
-    function W:SetActivationColor(C)assert(typeof(C)=="Color3","DINGOSQUAD: ActivationColor must be a Color3");self.ActivationColor=C;if self.ActiveTab then self.ActiveTab.Button.TextColor3=C end;for _,X in pairs(self.Controls)do if X.Type=="Toggle" and X.ToggleButton and X.Value then X.ToggleButton.BackgroundColor3=C elseif X.Type=="Slider" then X.Fill.BackgroundColor3=C;X.Knob.BackgroundColor3=C end end end
+    function W:SetActivationColor(C)assert(typeof(C)=="Color3","DINGOSQUAD: ActivationColor must be a Color3");self.ActivationColor=C;if self.ActiveTab then self.ActiveTab.Button.TextColor3=C end;for _,X in pairs(self.Controls)do if X.Type=="Toggle" and X.ToggleButton and X.Value then X.ToggleButton.BackgroundColor3=C elseif X.Type=="Slider" then X.Fill.BackgroundColor3=C;X.Knob.BackgroundColor3=C elseif X.Type=="Keybind" and X.Active then X.Button.BackgroundColor3=C end end end
     function W:GetTabCount()return #self.Tabs end
     function W:Destroy()if self.Destroyed then return end self.Destroyed=true;DisconnectAll(self.Connections);if self.ScreenGui then self.ScreenGui:Destroy()end;table.clear(self.Tabs);table.clear(self.Controls);table.clear(self.State.Tabs);table.clear(self.State.Controls)end
     return W
