@@ -1,7 +1,7 @@
 --[[
     DINGOSQUAD
-    Stage 2.4
-    Slider control
+    Stage 2.5
+    Dropdown control
 
     Controls are intentionally kept simple and manually positioned so the
     library can continue matching the converted ScreenGui layout.
@@ -12,7 +12,7 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
 local Library = {}
-Library.Version = "0.2.4"
+Library.Version = "0.2.5"
 Library.Windows = {}
 
 local DEFAULT_ACTIVATION_COLOR = Color3.fromRGB(150, 8, 34)
@@ -27,7 +27,6 @@ local COLORS = {
     Text = Color3.fromRGB(255, 255, 255),
     ToggleOff = Color3.fromRGB(59, 59, 59),
     SliderBackground = Color3.fromRGB(35, 35, 35),
-    SliderFill = Color3.fromRGB(150, 8, 34),
 }
 
 local FONTS = {
@@ -325,67 +324,39 @@ local function CreateSlider(Tab, Settings)
     Slider.Frame = Container
 
     local Title = Create("TextLabel", {
-        Name = "Title",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 120, 0, 13),
-        Position = UDim2.new(0, 0, 0, 0),
-        Text = Settings.Name,
-        TextColor3 = COLORS.Text,
-        TextSize = 14,
-        Font = FONTS.Main,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
+        Name = "Title", BackgroundTransparency = 1, BorderSizePixel = 0,
+        Size = UDim2.new(0, 120, 0, 13), Position = UDim2.new(0, 0, 0, 0),
+        Text = Settings.Name, TextColor3 = COLORS.Text, TextSize = 14, Font = FONTS.Main,
+        TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center,
         Parent = Container,
     })
     Slider.Title = Title
 
     local ValueLabel = Create("TextLabel", {
-        Name = "Value",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 55, 0, 13),
-        Position = UDim2.new(0, 125, 0, 0),
-        Text = "",
-        TextColor3 = COLORS.Text,
-        TextSize = 13,
-        Font = FONTS.Main,
-        TextXAlignment = Enum.TextXAlignment.Right,
-        TextYAlignment = Enum.TextYAlignment.Center,
+        Name = "Value", BackgroundTransparency = 1, BorderSizePixel = 0,
+        Size = UDim2.new(0, 55, 0, 13), Position = UDim2.new(0, 125, 0, 0),
+        Text = "", TextColor3 = COLORS.Text, TextSize = 13, Font = FONTS.Main,
+        TextXAlignment = Enum.TextXAlignment.Right, TextYAlignment = Enum.TextYAlignment.Center,
         Parent = Container,
     })
     Slider.ValueLabel = ValueLabel
 
     local Track = Create("TextButton", {
-        Name = "Track",
-        AutoButtonColor = false,
-        BackgroundColor3 = COLORS.SliderBackground,
-        BorderSizePixel = 1,
-        BorderColor3 = COLORS.ControlBorder,
-        Size = UDim2.new(0, 180, 0, 8),
-        Position = UDim2.new(0, 0, 0, 17),
-        Text = "",
-        Parent = Container,
+        Name = "Track", AutoButtonColor = false, BackgroundColor3 = COLORS.SliderBackground,
+        BorderSizePixel = 1, BorderColor3 = COLORS.ControlBorder,
+        Size = UDim2.new(0, 180, 0, 8), Position = UDim2.new(0, 0, 0, 17), Text = "", Parent = Container,
     })
     Slider.Track = Track
 
     local Fill = Create("Frame", {
-        Name = "Fill",
-        BackgroundColor3 = Window.ActivationColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 0, 1, 0),
-        Position = UDim2.new(0, 0, 0, 0),
-        Parent = Track,
+        Name = "Fill", BackgroundColor3 = Window.ActivationColor, BorderSizePixel = 0,
+        Size = UDim2.new(0, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0), Parent = Track,
     })
     Slider.Fill = Fill
 
     local Knob = Create("Frame", {
-        Name = "Knob",
-        BackgroundColor3 = Window.ActivationColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 5, 1, 4),
-        Position = UDim2.new(0, -2, 0, -2),
-        Parent = Track,
+        Name = "Knob", BackgroundColor3 = Window.ActivationColor, BorderSizePixel = 0,
+        Size = UDim2.new(0, 5, 1, 4), Position = UDim2.new(0, -2, 0, -2), Parent = Track,
     })
     Slider.Knob = Knob
 
@@ -401,9 +372,7 @@ local function CreateSlider(Tab, Settings)
     end
 
     local function FormatValue(Value)
-        if Value % 1 == 0 then
-            return tostring(math.floor(Value))
-        end
+        if Value % 1 == 0 then return tostring(math.floor(Value)) end
         return string.format("%.3f", Value):gsub("0+$", ""):gsub("%.$", "")
     end
 
@@ -429,9 +398,7 @@ local function CreateSlider(Tab, Settings)
         if Fire ~= false then FireCallback() end
     end
 
-    function Slider:GetValue()
-        return self.Value
-    end
+    function Slider:GetValue() return self.Value end
 
     local function UpdateFromInput(Input)
         local X = Input.Position.X
@@ -447,14 +414,12 @@ local function CreateSlider(Tab, Settings)
             UpdateFromInput(Input)
         end
     end)
-
     Slider.Connections[#Slider.Connections + 1] = UserInputService.InputChanged:Connect(function(Input)
         if not Dragging then return end
         if Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch then
             UpdateFromInput(Input)
         end
     end)
-
     Slider.Connections[#Slider.Connections + 1] = UserInputService.InputEnded:Connect(function(Input)
         if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
             Dragging = false
@@ -477,6 +442,197 @@ local function CreateSlider(Tab, Settings)
     return Slider
 end
 
+local function CreateDropdown(Tab, Settings)
+    Settings = Settings or {}
+    assert(type(Settings.Name) == "string" and Settings.Name ~= "", "DINGOSQUAD: Dropdown name must be a non-empty string")
+    assert(type(Settings.Options) == "table", "DINGOSQUAD: Dropdown Options must be a table")
+    assert(Settings.Default == nil or type(Settings.Default) == "string", "DINGOSQUAD: Dropdown Default must be a string or nil")
+    assert(Settings.Callback == nil or type(Settings.Callback) == "function", "DINGOSQUAD: Dropdown callback must be a function")
+
+    local Window = Tab.Window
+    local Dropdown = {
+        Name = Settings.Name,
+        Type = "Dropdown",
+        Options = {},
+        Value = nil,
+        Callback = Settings.Callback or function() end,
+        Connections = {},
+        Open = false,
+    }
+    RegisterControl(Window, Tab, Dropdown)
+
+    local Index = #Tab.ControlOrder + 1
+    local YOffset = 10 + ((Index - 1) * 34)
+
+    local Container = Create("Frame", {
+        Name = "Dropdown_" .. Dropdown.ID,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 180, 0, 18),
+        Position = UDim2.new(0, 28, 0, YOffset),
+        ZIndex = 10,
+        Parent = Tab.ControlsContainer,
+    })
+    Dropdown.Frame = Container
+
+    local Title = Create("TextLabel", {
+        Name = "Title", BackgroundTransparency = 1, BorderSizePixel = 0,
+        Size = UDim2.new(0, 75, 0, 17), Position = UDim2.new(0, 0, 0, 0),
+        Text = Settings.Name, TextColor3 = COLORS.Text, TextSize = 14, Font = FONTS.Main,
+        TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center,
+        ZIndex = 11, Parent = Container,
+    })
+    Dropdown.Title = Title
+
+    local Selector = Create("TextButton", {
+        Name = "Selector", AutoButtonColor = false,
+        BackgroundColor3 = COLORS.ControlBackground, BorderSizePixel = 1, BorderColor3 = COLORS.ControlBorder,
+        Size = UDim2.new(0, 105, 0, 17), Position = UDim2.new(0, 75, 0, 0),
+        Text = "", TextColor3 = COLORS.Text, TextSize = 13, Font = FONTS.Main,
+        TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+        ZIndex = 11, Parent = Container,
+    })
+    Dropdown.Selector = Selector
+
+    local Arrow = Create("TextLabel", {
+        Name = "Arrow", BackgroundTransparency = 1, BorderSizePixel = 0,
+        Size = UDim2.new(0, 16, 1, 0), Position = UDim2.new(1, -18, 0, 0),
+        Text = "v", TextColor3 = COLORS.Text, TextSize = 12, Font = FONTS.Main,
+        TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center,
+        ZIndex = 12, Parent = Selector,
+    })
+
+    local OptionsFrame = Create("Frame", {
+        Name = "Options", Visible = false, BackgroundColor3 = Color3.fromRGB(19, 19, 19),
+        BorderSizePixel = 1, BorderColor3 = COLORS.ControlBorder,
+        Size = UDim2.new(0, 105, 0, 0), Position = UDim2.new(0, 75, 0, 18),
+        ClipsDescendants = true, ZIndex = 20, Parent = Container,
+    })
+    Dropdown.OptionsFrame = OptionsFrame
+
+    local OptionsLayout = Create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Vertical,
+        HorizontalAlignment = Enum.HorizontalAlignment.Left,
+        VerticalAlignment = Enum.VerticalAlignment.Top,
+        Padding = UDim.new(0, 0),
+        Parent = OptionsFrame,
+    })
+
+    local function SetOpen(State)
+        Dropdown.Open = State
+        OptionsFrame.Visible = State
+        Arrow.Text = State and "^" or "v"
+        OptionsFrame.Size = UDim2.new(0, 105, 0, math.min(#Dropdown.Options * 20, 160))
+    end
+
+    local function UpdateSelector()
+        Selector.Text = Dropdown.Value or "-"
+    end
+
+    local function FireCallback()
+        local Success, ErrorMessage = pcall(Dropdown.Callback, Dropdown.Value)
+        if not Success then warn("[DINGOSQUAD] Dropdown callback error:", ErrorMessage) end
+    end
+
+    local function RebuildOptions()
+        for _, Child in ipairs(OptionsFrame:GetChildren()) do
+            if Child:IsA("TextButton") then Child:Destroy() end
+        end
+
+        for IndexValue, Option in ipairs(Dropdown.Options) do
+            local OptionButton = Create("TextButton", {
+                Name = "Option_" .. IndexValue,
+                AutoButtonColor = false,
+                BackgroundColor3 = Color3.fromRGB(19, 19, 19),
+                BorderSizePixel = 0,
+                Size = UDim2.new(1, 0, 0, 20),
+                Text = tostring(Option),
+                TextColor3 = COLORS.Text,
+                TextSize = 13,
+                Font = FONTS.Main,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 21,
+                Parent = OptionsFrame,
+            })
+
+            Dropdown.Connections[#Dropdown.Connections + 1] = OptionButton.MouseButton1Click:Connect(function()
+                if Dropdown.Destroyed then return end
+                Dropdown.Value = Option
+                UpdateSelector()
+                SetOpen(false)
+                FireCallback()
+            end)
+        end
+
+        OptionsFrame.Size = UDim2.new(0, 105, 0, math.min(#Dropdown.Options * 20, 160))
+    end
+
+    function Dropdown:SetValue(Value, Fire)
+        if self.Destroyed then return end
+        assert(type(Value) == "string", "DINGOSQUAD: Dropdown value must be a string")
+        for _, Option in ipairs(self.Options) do
+            if tostring(Option) == Value then
+                self.Value = Option
+                UpdateSelector()
+                if Fire ~= false then FireCallback() end
+                return
+            end
+        end
+        error("DINGOSQUAD: Dropdown option '" .. Value .. "' does not exist")
+    end
+
+    function Dropdown:GetValue()
+        return self.Value
+    end
+
+    function Dropdown:SetOptions(Options)
+        assert(type(Options) == "table", "DINGOSQUAD: Dropdown Options must be a table")
+        self.Options = {}
+        for _, Option in ipairs(Options) do
+            assert(type(Option) == "string", "DINGOSQUAD: Dropdown options must be strings")
+            table.insert(self.Options, Option)
+        end
+
+        local PreviousValue = self.Value
+        self.Value = nil
+        for _, Option in ipairs(self.Options) do
+            if Option == PreviousValue then
+                self.Value = Option
+                break
+            end
+        end
+        if not self.Value and self.Options[1] then
+            self.Value = self.Options[1]
+        end
+        UpdateSelector()
+        RebuildOptions()
+        SetOpen(false)
+    end
+
+    Dropdown.Connections[#Dropdown.Connections + 1] = Selector.MouseButton1Click:Connect(function()
+        if Dropdown.Destroyed then return end
+        SetOpen(not Dropdown.Open)
+    end)
+
+    Dropdown:SetOptions(Settings.Options)
+    if Settings.Default ~= nil then
+        Dropdown:SetValue(Settings.Default, false)
+    end
+
+    function Dropdown:Destroy()
+        if self.Destroyed then return end
+        self.Destroyed = true
+        SetOpen(false)
+        DisconnectAll(self.Connections)
+        if self.Frame then self.Frame:Destroy() end
+        Window.Controls[self.ID] = nil
+        Tab.Controls[self.ID] = nil
+    end
+
+    table.insert(Tab.ControlOrder, Dropdown)
+    return Dropdown
+end
+
 local function CreateTabObject(Window, Name)
     Window.NextTabID += 1
     return {ID = Window.NextTabID, Name = Name, Window = Window, Frame = nil, Button = nil, Controls = {}, ControlOrder = {}, Connections = {}, Destroyed = false}
@@ -486,6 +642,7 @@ local function AddTabAPI(Tab)
     function Tab:CreateButton(Settings) return CreateButton(self, Settings) end
     function Tab:CreateToggle(Settings) return CreateToggle(self, Settings) end
     function Tab:CreateSlider(Settings) return CreateSlider(self, Settings) end
+    function Tab:CreateDropdown(Settings) return CreateDropdown(self, Settings) end
     return Tab
 end
 
@@ -544,6 +701,8 @@ local function CreateWindowObject(Settings)
             elseif Control.Type == "Slider" and Control.Fill and Control.Knob then
                 Control.Fill.BackgroundColor3 = Color
                 Control.Knob.BackgroundColor3 = Color
+            elseif Control.Type == "Dropdown" and Control.Selector then
+                Control.Selector.BorderColor3 = Color
             end
         end
     end
