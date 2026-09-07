@@ -1,44 +1,34 @@
 --[[
     DINGOSQUAD
-    Stage 2.5
-    Dropdown control
+    Stage 2.6
+    Textbox control
 ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
-local Library = {}
-Library.Version = "0.2.5"
-Library.Windows = {}
-
+local Library = {Version = "0.2.6", Windows = {}}
 local DEFAULT_ACTIVATION_COLOR = Color3.fromRGB(150, 8, 34)
 local COLORS = {
-    MainBackground = Color3.fromRGB(4, 4, 4),
-    SecondaryBackground = Color3.fromRGB(9, 9, 9),
-    Border = Color3.fromRGB(34, 39, 45),
-    Stroke = Color3.fromRGB(57, 57, 57),
-    ControlBackground = Color3.fromRGB(59, 59, 59),
-    ControlBorder = Color3.fromRGB(49, 49, 49),
-    Text = Color3.fromRGB(255, 255, 255),
-    ToggleOff = Color3.fromRGB(59, 59, 59),
-    SliderBackground = Color3.fromRGB(35, 35, 35),
-    DropdownBackground = Color3.fromRGB(19, 19, 19),
+    MainBackground = Color3.fromRGB(4,4,4), SecondaryBackground = Color3.fromRGB(9,9,9),
+    Border = Color3.fromRGB(34,39,45), Stroke = Color3.fromRGB(57,57,57),
+    ControlBackground = Color3.fromRGB(59,59,59), ControlBorder = Color3.fromRGB(49,49,49),
+    Text = Color3.fromRGB(255,255,255), ToggleOff = Color3.fromRGB(59,59,59),
+    SliderBackground = Color3.fromRGB(35,35,35), DropdownBackground = Color3.fromRGB(19,19,19)
 }
 local FONTS = {Main = Enum.Font.Code, Control = Enum.Font.SourceSans}
 
-local function Create(ClassName, Properties)
-    local Object = Instance.new(ClassName)
-    for Property, Value in pairs(Properties or {}) do Object[Property] = Value end
-    return Object
+local function Create(Class, Props)
+    local O = Instance.new(Class)
+    for K,V in pairs(Props or {}) do O[K] = V end
+    return O
 end
-
-local function DisconnectAll(Connections)
-    for _, Connection in ipairs(Connections) do if Connection then Connection:Disconnect() end end
-    table.clear(Connections)
+local function DisconnectAll(T)
+    for _,C in ipairs(T) do if C then C:Disconnect() end end
+    table.clear(T)
 end
-
-local function RegisterControl(Window, Tab, Control)
+local function Register(Window, Tab, Control)
     Window.NextControlID += 1
     Control.ID = Window.NextControlID
     Control.Destroyed = false
@@ -46,279 +36,118 @@ local function RegisterControl(Window, Tab, Control)
     Tab.Controls[Control.ID] = Control
     return Control
 end
+local function Y(Tab) return 10 + (#Tab.ControlOrder * 34) end
 
-local function CreateWindowUI(Window)
-    local ScreenGui = Create("ScreenGui", {
-        Name = "DINGOSQUAD_" .. tostring(math.random(100000, 999999)),
-        ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = LocalPlayer:WaitForChild("PlayerGui")
-    })
-    Window.ScreenGui = ScreenGui
-    Window.MainFrame = Create("Frame", {
-        Name = "MainFrame", BackgroundColor3 = COLORS.MainBackground, BorderSizePixel = 6, BorderColor3 = COLORS.Border,
-        Size = UDim2.new(0, 674, 0, 561), Position = UDim2.new(0.21533, 0, 0.03538, 0), Parent = ScreenGui
-    })
-    Create("UIStroke", {Thickness = 3.4, Color = COLORS.Stroke, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, LineJoinMode = Enum.LineJoinMode.Miter, Parent = Window.MainFrame})
-    Window.TabList = Create("Frame", {
-        Name = "TabList", BackgroundColor3 = COLORS.SecondaryBackground, BorderSizePixel = 1, BorderColor3 = COLORS.Border,
-        Size = UDim2.new(0, 86, 0, 517), Position = UDim2.new(0.04748, 0, 0.03387, 0), Parent = Window.MainFrame
-    })
-    Window.DynamicTabContainer = Create("Frame", {Name = "DynamicTabs", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -65), Position = UDim2.new(0, 0, 0, 8), Parent = Window.TabList})
-    Create("UIListLayout", {FillDirection = Enum.FillDirection.Vertical, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Top, Padding = UDim.new(0, 3), Parent = Window.DynamicTabContainer})
-    Window.ConfigButton = Create("TextButton", {
-        Name = "config", AutoButtonColor = false, BackgroundTransparency = 1, BorderSizePixel = 0,
-        Size = UDim2.new(0, 86, 0, 24), Position = UDim2.new(0, 0, 0.85687, 0), Text = "config", TextColor3 = COLORS.Text, TextSize = 16, Font = FONTS.Main, Parent = Window.TabList
-    })
-    Window.ContentContainer = Create("Frame", {Name = "ContentContainer", BackgroundTransparency = 1, Size = UDim2.new(0, 480, 0, 517), Position = UDim2.new(0.23591, 0, 0.03387, 0), Parent = Window.MainFrame})
-    Window.Keybinds = Create("Frame", {
-        Name = "Keybinds", Visible = false, BackgroundColor3 = COLORS.MainBackground, BorderSizePixel = 6, BorderColor3 = COLORS.Border,
-        Size = UDim2.new(0, 202, 0, 100), Position = UDim2.new(0.80536, 0, 0.23692, 0), Parent = ScreenGui
-    })
-    Create("UIStroke", {Thickness = 3.4, Color = COLORS.Stroke, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, LineJoinMode = Enum.LineJoinMode.Miter, Parent = Window.Keybinds})
-    Window.KeybindFrame = Create("Frame", {Name = "KeybindFrame", BackgroundColor3 = Color3.fromRGB(27, 27, 27), BorderSizePixel = 0, Size = UDim2.new(0, 160, 0, 61), Position = UDim2.new(0.10339, 0, 0.19, 0), Parent = Window.Keybinds})
+local function CreateWindowUI(W)
+    local Gui = Create("ScreenGui", {Name="DINGOSQUAD_"..math.random(100000,999999), ResetOnSpawn=false, ZIndexBehavior=Enum.ZIndexBehavior.Sibling, Parent=LocalPlayer:WaitForChild("PlayerGui")})
+    W.ScreenGui = Gui
+    W.MainFrame = Create("Frame", {Name="MainFrame", BackgroundColor3=COLORS.MainBackground, BorderSizePixel=6, BorderColor3=COLORS.Border, Size=UDim2.new(0,674,0,561), Position=UDim2.new(0.21533,0,0.03538,0), Parent=Gui})
+    Create("UIStroke", {Thickness=3.4, Color=COLORS.Stroke, ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter, Parent=W.MainFrame})
+    W.TabList = Create("Frame", {Name="TabList", BackgroundColor3=COLORS.SecondaryBackground, BorderSizePixel=1, BorderColor3=COLORS.Border, Size=UDim2.new(0,86,0,517), Position=UDim2.new(0.04748,0,0.03387,0), Parent=W.MainFrame})
+    W.DynamicTabContainer = Create("Frame", {Name="DynamicTabs", BackgroundTransparency=1, Size=UDim2.new(1,0,1,-65), Position=UDim2.new(0,0,0,8), Parent=W.TabList})
+    Create("UIListLayout", {FillDirection=Enum.FillDirection.Vertical, HorizontalAlignment=Enum.HorizontalAlignment.Center, VerticalAlignment=Enum.VerticalAlignment.Top, Padding=UDim.new(0,3), Parent=W.DynamicTabContainer})
+    Create("TextButton", {Name="config", AutoButtonColor=false, BackgroundTransparency=1, BorderSizePixel=0, Size=UDim2.new(0,86,0,24), Position=UDim2.new(0,0,0.85687,0), Text="config", TextColor3=COLORS.Text, TextSize=16, Font=FONTS.Main, Parent=W.TabList})
+    W.ContentContainer = Create("Frame", {Name="ContentContainer", BackgroundTransparency=1, Size=UDim2.new(0,480,0,517), Position=UDim2.new(0.23591,0,0.03387,0), Parent=W.MainFrame})
+    W.Keybinds = Create("Frame", {Name="Keybinds", Visible=false, BackgroundColor3=COLORS.MainBackground, BorderSizePixel=6, BorderColor3=COLORS.Border, Size=UDim2.new(0,202,0,100), Position=UDim2.new(0.80536,0,0.23692,0), Parent=Gui})
+    Create("UIStroke", {Thickness=3.4, Color=COLORS.Stroke, ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter, Parent=W.Keybinds})
+    W.KeybindFrame = Create("Frame", {Name="KeybindFrame", BackgroundColor3=Color3.fromRGB(27,27,27), BorderSizePixel=0, Size=UDim2.new(0,160,0,61), Position=UDim2.new(0.10339,0,0.19,0), Parent=W.Keybinds})
+end
+local function CreateTabFrame(W,T)
+    T.Frame = Create("Frame", {Name="TabFrame_"..T.ID, Visible=false, BackgroundColor3=COLORS.SecondaryBackground, BorderSizePixel=1, BorderColor3=COLORS.Border, Size=UDim2.new(0,480,0,517), Parent=W.ContentContainer})
+    T.ControlsContainer = Create("Frame", {Name="Controls", BackgroundTransparency=1, BorderSizePixel=0, Size=UDim2.new(1,0,1,-35), Parent=T.Frame})
 end
 
-local function CreateTabFrame(Window, Tab)
-    Tab.Frame = Create("Frame", {
-        Name = "TabFrame_" .. Tab.ID, Visible = false, BackgroundColor3 = COLORS.SecondaryBackground,
-        BorderSizePixel = 1, BorderColor3 = COLORS.Border, Size = UDim2.new(0, 480, 0, 517), Position = UDim2.new(0, 0, 0, 0), Parent = Window.ContentContainer
-    })
-    Tab.ControlsContainer = Create("Frame", {Name = "Controls", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, -35), Parent = Tab.Frame})
+local function CreateButton(T,S)
+    S=S or {}; assert(type(S.Name)=="string" and S.Name~="","DINGOSQUAD: Button name must be a non-empty string"); assert(S.Callback==nil or type(S.Callback)=="function","DINGOSQUAD: Button callback must be a function")
+    local W=T.Window; local B=Register(W,T,{Name=S.Name,Type="Button",Callback=S.Callback or function() end,Connections={}})
+    B.Frame=Create("TextButton",{Name="Button_"..B.ID,AutoButtonColor=false,BackgroundColor3=COLORS.ControlBackground,BorderSizePixel=1,BorderColor3=COLORS.ControlBorder,Size=UDim2.new(0,126,0,17),Position=UDim2.new(0,28,0,Y(T)),Text=S.Name,TextColor3=COLORS.Text,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left,Font=FONTS.Main,Parent=T.ControlsContainer})
+    B.Connections[#B.Connections+1]=B.Frame.MouseButton1Click:Connect(function() if not B.Destroyed then local ok,e=pcall(B.Callback);if not ok then warn("[DINGOSQUAD] Button callback error:",e) end end end)
+    function B:Destroy() if self.Destroyed then return end self.Destroyed=true;DisconnectAll(self.Connections);self.Frame:Destroy();W.Controls[self.ID]=nil;T.Controls[self.ID]=nil end
+    table.insert(T.ControlOrder,B);return B
 end
 
-local function ControlYOffset(Tab)
-    return 10 + (#Tab.ControlOrder * 34)
+local function CreateToggle(T,S)
+    S=S or {};assert(type(S.Name)=="string" and S.Name~="","DINGOSQUAD: Toggle name must be a non-empty string");assert(S.Callback==nil or type(S.Callback)=="function","DINGOSQUAD: Toggle callback must be a function")
+    local W=T.Window;local B=Register(W,T,{Name=S.Name,Type="Toggle",Value=S.Default==true,Callback=S.Callback or function() end,Keybind=nil,KeybindMode="TOGGLE",Connections={}})
+    local X=Create("TextButton",{Name="ToggleButton",AutoButtonColor=false,BackgroundColor3=COLORS.ToggleOff,BorderSizePixel=0,ClipsDescendants=false,Size=UDim2.new(0,11,0,18),Position=UDim2.new(0.05833,0,0,Y(T)),Text="",Parent=T.ControlsContainer});B.Frame=X;B.ToggleButton=X
+    Create("UIAspectRatioConstraint",{Name="UIAspectRatioConstraint",AspectRatio=11/18,DominantAxis=Enum.DominantAxis.Height,Parent=X})
+    B.Title=Create("TextLabel",{Name="Title",TextStrokeTransparency=0,BorderSizePixel=0,TextSize=14,BackgroundTransparency=1,TextColor3=COLORS.Text,Size=UDim2.new(0,70,0,13),Text=S.Name,Position=UDim2.new(3.45455,0,-0.09091,0),Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Center,ZIndex=X.ZIndex+1,Parent=X})
+    local Bind=Create("TextButton",{Name="Bind",AutoButtonColor=false,BorderSizePixel=0,TextSize=14,BackgroundTransparency=1,Size=UDim2.new(0,61,0,13),Text="[-]",Position=UDim2.new(10.81818,0,-0.09091,0),TextColor3=COLORS.Text,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Center,Font=FONTS.Main,ZIndex=X.ZIndex+2,Parent=X});B.BindButton=Bind
+    B.BindOptions=Create("Frame",{Name="BindOptions",Visible=false,BorderSizePixel=0,BackgroundColor3=Color3.fromRGB(19,19,19),Size=UDim2.new(0,88,0,77),Position=UDim2.new(0.80328,0,0.07692,0),Parent=Bind})
+    for _,D in ipairs({{"ALWAYS",0.06401},{"TOGGLE",0.41466},{"HOLD",0.7783}}) do Create("TextButton",{Name=D[1],AutoButtonColor=false,BorderSizePixel=0,BackgroundTransparency=1,Size=UDim2.new(0,61,0,13),Position=UDim2.new(0.14391,0,D[2],0),Text=D[1],TextColor3=COLORS.Text,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left,Font=FONTS.Main,Parent=B.BindOptions}) end
+    local function Visual() X.BackgroundColor3=B.Value and W.ActivationColor or COLORS.ToggleOff end
+    local function Fire() local ok,e=pcall(B.Callback,B.Value);if not ok then warn("[DINGOSQUAD] Toggle callback error:",e) end end
+    function B:SetValue(V,F) if self.Destroyed then return end self.Value=V==true;Visual();if F~=false then Fire() end end
+    function B:GetValue() return self.Value end
+    function B:SetKeybind(K,M) if K~=nil then assert(typeof(K)=="EnumItem" and K.EnumType==Enum.KeyCode,"DINGOSQUAD: Keybind must be an Enum.KeyCode or nil") end self.Keybind=K;self.KeybindMode=M or "TOGGLE";Bind.Text=K and ("["..K.Name.."]") or "[-]" end
+    function B:GetKeybind() return self.Keybind,self.KeybindMode end
+    B.Connections[#B.Connections+1]=X.MouseButton1Click:Connect(function() B:SetValue(not B.Value) end)
+    function B:Destroy() if self.Destroyed then return end self.Destroyed=true;DisconnectAll(self.Connections);X:Destroy();W.Controls[self.ID]=nil;T.Controls[self.ID]=nil end
+    Visual();table.insert(T.ControlOrder,B);return B
 end
 
-local function CreateButton(Tab, Settings)
-    Settings = Settings or {}
-    assert(type(Settings.Name) == "string" and Settings.Name ~= "", "DINGOSQUAD: Button name must be a non-empty string")
-    assert(Settings.Callback == nil or type(Settings.Callback) == "function", "DINGOSQUAD: Button callback must be a function")
-    local Window = Tab.Window
-    local Button = {Name = Settings.Name, Type = "Button", Callback = Settings.Callback or function() end, Connections = {}}
-    RegisterControl(Window, Tab, Button)
-    Button.Frame = Create("TextButton", {
-        Name = "Button_" .. Button.ID, AutoButtonColor = false, BackgroundColor3 = COLORS.ControlBackground, BorderSizePixel = 1, BorderColor3 = COLORS.ControlBorder,
-        Size = UDim2.new(0, 126, 0, 17), Position = UDim2.new(0, 28, 0, ControlYOffset(Tab)), Text = Settings.Name, TextColor3 = COLORS.Text, TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left, Font = FONTS.Main, Parent = Tab.ControlsContainer
-    })
-    Button.Connections[#Button.Connections + 1] = Button.Frame.MouseButton1Click:Connect(function()
-        if Button.Destroyed then return end
-        local OK, Err = pcall(Button.Callback)
-        if not OK then warn("[DINGOSQUAD] Button callback error:", Err) end
-    end)
-    function Button:Destroy()
-        if self.Destroyed then return end
-        self.Destroyed = true; DisconnectAll(self.Connections); if self.Frame then self.Frame:Destroy() end
-        Window.Controls[self.ID] = nil; Tab.Controls[self.ID] = nil
-    end
-    table.insert(Tab.ControlOrder, Button)
-    return Button
+local function CreateSlider(T,S)
+    S=S or {};assert(type(S.Name)=="string" and S.Name~="","DINGOSQUAD: Slider name must be a non-empty string");assert(type(S.Min)=="number","DINGOSQUAD: Slider Min must be a number");assert(type(S.Max)=="number" and S.Max>S.Min,"DINGOSQUAD: Slider Max must be greater than Min");assert(S.Callback==nil or type(S.Callback)=="function","DINGOSQUAD: Slider callback must be a function")
+    local W=T.Window;local Min=S.Min;local Max=S.Max;local Inc=S.Increment or 1;local D=S.Default or Min;local B=Register(W,T,{Name=S.Name,Type="Slider",Min=Min,Max=Max,Increment=Inc,Value=D,Callback=S.Callback or function() end,Connections={}})
+    B.Frame=Create("Frame",{Name="Slider_"..B.ID,BackgroundTransparency=1,Size=UDim2.new(0,180,0,28),Position=UDim2.new(0,28,0,Y(T)),Parent=T.ControlsContainer});B.Title=Create("TextLabel",{Name="Title",BackgroundTransparency=1,Size=UDim2.new(0,120,0,13),Text=S.Name,TextColor3=COLORS.Text,TextSize=14,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Left,Parent=B.Frame});B.ValueLabel=Create("TextLabel",{Name="Value",BackgroundTransparency=1,Size=UDim2.new(0,55,0,13),Position=UDim2.new(0,125,0,0),TextColor3=COLORS.Text,TextSize=13,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Right,Parent=B.Frame});B.Track=Create("TextButton",{Name="Track",AutoButtonColor=false,BackgroundColor3=COLORS.SliderBackground,BorderSizePixel=1,BorderColor3=COLORS.ControlBorder,Size=UDim2.new(0,180,0,8),Position=UDim2.new(0,0,0,17),Text="",Parent=B.Frame});B.Fill=Create("Frame",{Name="Fill",BackgroundColor3=W.ActivationColor,BorderSizePixel=0,Parent=B.Track});B.Knob=Create("Frame",{Name="Knob",BackgroundColor3=W.ActivationColor,BorderSizePixel=0,Size=UDim2.new(0,5,1,4),Parent=B.Track})
+    local Drag=false;local function Clamp(V)local N=math.floor(((V-Min)/Inc)+0.5);return math.clamp(Min+N*Inc,Min,Max)end;local function Visual()local A=math.clamp((B.Value-Min)/(Max-Min),0,1);B.Fill.Size=UDim2.new(A,0,1,0);B.Knob.Position=UDim2.new(A,-2,0,-2);B.ValueLabel.Text=B.Value%1==0 and tostring(math.floor(B.Value)) or tostring(B.Value)end;local function Fire()local ok,e=pcall(B.Callback,B.Value);if not ok then warn("[DINGOSQUAD] Slider callback error:",e)end end
+    function B:SetValue(V,F)assert(type(V)=="number","DINGOSQUAD: Slider value must be a number");if self.Destroyed then return end;self.Value=Clamp(V);Visual();if F~=false then Fire()end end;function B:GetValue()return self.Value end
+    local function Input(I)local A=math.clamp((I.Position.X-B.Track.AbsolutePosition.X)/math.max(B.Track.AbsoluteSize.X,1),0,1);B:SetValue(Min+(Max-Min)*A)end
+    B.Connections[#B.Connections+1]=B.Track.InputBegan:Connect(function(I)if I.UserInputType==Enum.UserInputType.MouseButton1 or I.UserInputType==Enum.UserInputType.Touch then Drag=true;Input(I)end end);B.Connections[#B.Connections+1]=UserInputService.InputChanged:Connect(function(I)if Drag and (I.UserInputType==Enum.UserInputType.MouseMovement or I.UserInputType==Enum.UserInputType.Touch)then Input(I)end end);B.Connections[#B.Connections+1]=UserInputService.InputEnded:Connect(function(I)if I.UserInputType==Enum.UserInputType.MouseButton1 or I.UserInputType==Enum.UserInputType.Touch then Drag=false end end)
+    function B:Destroy()if self.Destroyed then return end self.Destroyed=true;Drag=false;DisconnectAll(self.Connections);self.Frame:Destroy();W.Controls[self.ID]=nil;T.Controls[self.ID]=nil end
+    B:SetValue(D,false);table.insert(T.ControlOrder,B);return B
 end
 
-local function CreateToggle(Tab, Settings)
-    Settings = Settings or {}
-    assert(type(Settings.Name) == "string" and Settings.Name ~= "", "DINGOSQUAD: Toggle name must be a non-empty string")
-    assert(Settings.Callback == nil or type(Settings.Callback) == "function", "DINGOSQUAD: Toggle callback must be a function")
-    local Window = Tab.Window
-    local Toggle = {Name = Settings.Name, Type = "Toggle", Value = Settings.Default == true, Callback = Settings.Callback or function() end, Keybind = nil, KeybindMode = "TOGGLE", Connections = {}}
-    RegisterControl(Window, Tab, Toggle)
-    local ToggleButton = Create("TextButton", {
-        Name = "ToggleButton", AutoButtonColor = false, BackgroundColor3 = COLORS.ToggleOff, BorderSizePixel = 0, ClipsDescendants = false,
-        Size = UDim2.new(0, 11, 0, 18), Position = UDim2.new(0.05833, 0, 0, ControlYOffset(Tab)), Text = "", Parent = Tab.ControlsContainer
-    })
-    Toggle.Frame = ToggleButton; Toggle.ToggleButton = ToggleButton
-    Create("UIAspectRatioConstraint", {Name = "UIAspectRatioConstraint", AspectRatio = 11 / 18, DominantAxis = Enum.DominantAxis.Height, Parent = ToggleButton})
-    Toggle.Title = Create("TextLabel", {
-        Name = "Title", TextStrokeTransparency = 0, BorderSizePixel = 0, TextSize = 14, BackgroundTransparency = 1, TextColor3 = COLORS.Text,
-        Size = UDim2.new(0, 70, 0, 13), Text = Settings.Name, Position = UDim2.new(3.45455, 0, -0.09091, 0), Font = FONTS.Main,
-        TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center, ZIndex = ToggleButton.ZIndex + 1, Parent = ToggleButton
-    })
-    local Bind = Create("TextButton", {
-        Name = "Bind", AutoButtonColor = false, BorderSizePixel = 0, TextSize = 14, BackgroundTransparency = 1,
-        Size = UDim2.new(0, 61, 0, 13), Text = "[-]", Position = UDim2.new(10.81818, 0, -0.09091, 0), TextColor3 = COLORS.Text,
-        TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center, Font = FONTS.Main, ZIndex = ToggleButton.ZIndex + 2, Parent = ToggleButton
-    })
-    Toggle.BindButton = Bind
-    Toggle.BindOptions = Create("Frame", {
-        Name = "BindOptions", Visible = false, BorderSizePixel = 0, BackgroundColor3 = Color3.fromRGB(19, 19, 19),
-        Size = UDim2.new(0, 88, 0, 77), Position = UDim2.new(0.80328, 0, 0.07692, 0), Parent = Bind
-    })
-    for _, Data in ipairs({{"ALWAYS", 0.06401}, {"TOGGLE", 0.41466}, {"HOLD", 0.7783}}) do
-        Create("TextButton", {Name = Data[1], AutoButtonColor = false, BorderSizePixel = 0, BackgroundTransparency = 1, Size = UDim2.new(0, 61, 0, 13), Position = UDim2.new(0.14391, 0, Data[2], 0), Text = Data[1], TextColor3 = COLORS.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Font = FONTS.Main, Parent = Toggle.BindOptions})
-    end
-    if Settings.ColorPicker == true then
-        Toggle.ColorPicker = Create("TextButton", {Name = "ColorPicker", AutoButtonColor = false, BorderSizePixel = 0, TextSize = 14, BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0), Size = UDim2.new(0, 43, 0, 18), Position = UDim2.new(16.36364, 0, -0.36364, 0), Font = FONTS.Control, Parent = ToggleButton})
-    end
-    local function UpdateVisual() ToggleButton.BackgroundColor3 = Toggle.Value and Window.ActivationColor or COLORS.ToggleOff end
-    local function Fire() local OK, Err = pcall(Toggle.Callback, Toggle.Value); if not OK then warn("[DINGOSQUAD] Toggle callback error:", Err) end end
-    function Toggle:SetValue(Value, FireCallback) if self.Destroyed then return end; self.Value = Value == true; UpdateVisual(); if FireCallback ~= false then Fire() end end
-    function Toggle:GetValue() return self.Value end
-    function Toggle:SetKeybind(Key, Mode)
-        if Key ~= nil then assert(typeof(Key) == "EnumItem" and Key.EnumType == Enum.KeyCode, "DINGOSQUAD: Keybind must be an Enum.KeyCode or nil") end
-        self.Keybind = Key; self.KeybindMode = Mode or "TOGGLE"; Bind.Text = Key and ("[" .. Key.Name .. "]") or "[-]"
-    end
-    function Toggle:GetKeybind() return self.Keybind, self.KeybindMode end
-    Toggle.Connections[#Toggle.Connections + 1] = ToggleButton.MouseButton1Click:Connect(function() Toggle:SetValue(not Toggle.Value) end)
-    function Toggle:Destroy() if self.Destroyed then return end; self.Destroyed = true; DisconnectAll(self.Connections); if self.Frame then self.Frame:Destroy() end; Window.Controls[self.ID] = nil; Tab.Controls[self.ID] = nil end
-    UpdateVisual()
-    table.insert(Tab.ControlOrder, Toggle)
-    return Toggle
+local function CreateDropdown(T,S)
+    S=S or {};assert(type(S.Name)=="string" and S.Name~="","DINGOSQUAD: Dropdown name must be a non-empty string");assert(type(S.Options)=="table","DINGOSQUAD: Dropdown Options must be a table");assert(S.Callback==nil or type(S.Callback)=="function","DINGOSQUAD: Dropdown callback must be a function")
+    local W=T.Window;local B=Register(W,T,{Name=S.Name,Type="Dropdown",Options={},Value=nil,Callback=S.Callback or function() end,Connections={},Open=false});for _,O in ipairs(S.Options)do table.insert(B.Options,tostring(O))end
+    B.Frame=Create("Frame",{Name="Dropdown_"..B.ID,BackgroundTransparency=1,Size=UDim2.new(0,180,0,22),Position=UDim2.new(0,28,0,Y(T)),Parent=T.ControlsContainer});B.Button=Create("TextButton",{Name="Button",AutoButtonColor=false,BackgroundColor3=COLORS.ControlBackground,BorderSizePixel=1,BorderColor3=COLORS.ControlBorder,Size=UDim2.new(0,180,0,20),Text="",Parent=B.Frame});Create("TextLabel",{Name="Title",BackgroundTransparency=1,Size=UDim2.new(0,70,1,0),Position=UDim2.new(0,7,0,0),Text=S.Name,TextColor3=COLORS.Text,TextSize=13,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Left,Parent=B.Button});B.ValueLabel=Create("TextLabel",{Name="Value",BackgroundTransparency=1,Size=UDim2.new(0,70,1,0),Position=UDim2.new(0,78,0,0),TextColor3=COLORS.Text,TextSize=13,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Right,Parent=B.Button});B.Arrow=Create("TextLabel",{Name="Arrow",BackgroundTransparency=1,Size=UDim2.new(0,15,1,0),Position=UDim2.new(1,-18,0,0),Text="v",TextColor3=COLORS.Text,TextSize=12,Font=FONTS.Main,Parent=B.Button});B.List=Create("Frame",{Name="Options",Visible=false,BackgroundColor3=COLORS.DropdownBackground,BorderSizePixel=1,BorderColor3=COLORS.ControlBorder,ClipsDescendants=true,Size=UDim2.new(0,180,0,0),Position=UDim2.new(0,0,0,21),ZIndex=20,Parent=B.Frame});Create("UIListLayout",{Parent=B.List})
+    local function Fire()local ok,e=pcall(B.Callback,B.Value);if not ok then warn("[DINGOSQUAD] Dropdown callback error:",e)end end;local function Visual()B.ValueLabel.Text=B.Value or "-";B.Arrow.Text=B.Open and "^" or "v" end
+    local function Refresh()for _,C in ipairs(B.List:GetChildren())do if C:IsA("TextButton")then C:Destroy()end end;for I,O in ipairs(B.Options)do local X=Create("TextButton",{Name="Option_"..I,AutoButtonColor=false,BackgroundColor3=COLORS.DropdownBackground,BorderSizePixel=0,Size=UDim2.new(1,0,0,20),Text=O,TextColor3=COLORS.Text,TextSize=13,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=21,Parent=B.List});Create("UIPadding",{PaddingLeft=UDim.new(0,7),Parent=X});B.Connections[#B.Connections+1]=X.MouseButton1Click:Connect(function()B:SetValue(O)end)end;B.List.Size=UDim2.new(0,180,0,math.min(#B.Options*20,160))end
+    function B:SetValue(V,F)if self.Destroyed then return end;V=tostring(V);for _,O in ipairs(self.Options)do if O==V then self.Value=V;self.Open=false;self.List.Visible=false;Visual();if F~=false then Fire()end;return end end end;function B:GetValue()return self.Value end;function B:SetOptions(O)assert(type(O)=="table","DINGOSQUAD: Dropdown Options must be a table");self.Options={};for _,V in ipairs(O)do table.insert(self.Options,tostring(V))end;self.Value=self.Options[1];Refresh();Visual()end
+    B.Connections[#B.Connections+1]=B.Button.MouseButton1Click:Connect(function()B.Open=not B.Open;B.List.Visible=B.Open;Visual()end);function B:Destroy()if self.Destroyed then return end self.Destroyed=true;DisconnectAll(self.Connections);self.Frame:Destroy();W.Controls[self.ID]=nil;T.Controls[self.ID]=nil end
+    Refresh();if S.Default~=nil then B:SetValue(S.Default,false)elseif B.Options[1]then B:SetValue(B.Options[1],false)end;table.insert(T.ControlOrder,B);return B
 end
 
-local function CreateSlider(Tab, Settings)
-    Settings = Settings or {}
-    assert(type(Settings.Name) == "string" and Settings.Name ~= "", "DINGOSQUAD: Slider name must be a non-empty string")
-    assert(type(Settings.Min) == "number", "DINGOSQUAD: Slider Min must be a number")
-    assert(type(Settings.Max) == "number" and Settings.Max > Settings.Min, "DINGOSQUAD: Slider Max must be greater than Min")
-    assert(Settings.Default == nil or type(Settings.Default) == "number", "DINGOSQUAD: Slider Default must be a number")
-    assert(Settings.Increment == nil or (type(Settings.Increment) == "number" and Settings.Increment > 0), "DINGOSQUAD: Slider Increment must be greater than 0")
-    assert(Settings.Callback == nil or type(Settings.Callback) == "function", "DINGOSQUAD: Slider callback must be a function")
-    local Window = Tab.Window; local Min = Settings.Min; local Max = Settings.Max; local Increment = Settings.Increment or 1; local Default = Settings.Default or Min
-    local Slider = {Name = Settings.Name, Type = "Slider", Min = Min, Max = Max, Increment = Increment, Value = Default, Callback = Settings.Callback or function() end, Connections = {}}
-    RegisterControl(Window, Tab, Slider)
-    Slider.Frame = Create("Frame", {Name = "Slider_" .. Slider.ID, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(0, 180, 0, 28), Position = UDim2.new(0, 28, 0, ControlYOffset(Tab)), Parent = Tab.ControlsContainer})
-    Slider.Title = Create("TextLabel", {Name = "Title", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(0, 120, 0, 13), Text = Settings.Name, TextColor3 = COLORS.Text, TextSize = 14, Font = FONTS.Main, TextXAlignment = Enum.TextXAlignment.Left, Parent = Slider.Frame})
-    Slider.ValueLabel = Create("TextLabel", {Name = "Value", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(0, 55, 0, 13), Position = UDim2.new(0, 125, 0, 0), TextColor3 = COLORS.Text, TextSize = 13, Font = FONTS.Main, TextXAlignment = Enum.TextXAlignment.Right, Parent = Slider.Frame})
-    Slider.Track = Create("TextButton", {Name = "Track", AutoButtonColor = false, BackgroundColor3 = COLORS.SliderBackground, BorderSizePixel = 1, BorderColor3 = COLORS.ControlBorder, Size = UDim2.new(0, 180, 0, 8), Position = UDim2.new(0, 0, 0, 17), Text = "", Parent = Slider.Frame})
-    Slider.Fill = Create("Frame", {Name = "Fill", BackgroundColor3 = Window.ActivationColor, BorderSizePixel = 0, Size = UDim2.new(0, 0, 1, 0), Parent = Slider.Track})
-    Slider.Knob = Create("Frame", {Name = "Knob", BackgroundColor3 = Window.ActivationColor, BorderSizePixel = 0, Size = UDim2.new(0, 5, 1, 4), Position = UDim2.new(0, -2, 0, -2), Parent = Slider.Track})
-    local Dragging = false
-    local function Clamp(Value) local Steps = math.floor(((Value - Min) / Increment) + 0.5); return math.clamp(Min + Steps * Increment, Min, Max) end
-    local function UpdateVisual() local Alpha = math.clamp((Slider.Value - Min) / (Max - Min), 0, 1); Slider.Fill.Size = UDim2.new(Alpha, 0, 1, 0); Slider.Knob.Position = UDim2.new(Alpha, -2, 0, -2); Slider.ValueLabel.Text = Slider.Value % 1 == 0 and tostring(math.floor(Slider.Value)) or tostring(Slider.Value) end
-    local function Fire() local OK, Err = pcall(Slider.Callback, Slider.Value); if not OK then warn("[DINGOSQUAD] Slider callback error:", Err) end end
-    function Slider:SetValue(Value, FireCallback) assert(type(Value) == "number", "DINGOSQUAD: Slider value must be a number"); if self.Destroyed then return end; self.Value = Clamp(Value); UpdateVisual(); if FireCallback ~= false then Fire() end end
-    function Slider:GetValue() return self.Value end
-    local function UpdateFromInput(Input) local Alpha = math.clamp((Input.Position.X - Slider.Track.AbsolutePosition.X) / math.max(Slider.Track.AbsoluteSize.X, 1), 0, 1); Slider:SetValue(Min + (Max - Min) * Alpha) end
-    Slider.Connections[#Slider.Connections + 1] = Slider.Track.InputBegan:Connect(function(Input) if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then Dragging = true; UpdateFromInput(Input) end end)
-    Slider.Connections[#Slider.Connections + 1] = UserInputService.InputChanged:Connect(function(Input) if Dragging and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then UpdateFromInput(Input) end end)
-    Slider.Connections[#Slider.Connections + 1] = UserInputService.InputEnded:Connect(function(Input) if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then Dragging = false end end)
-    function Slider:Destroy() if self.Destroyed then return end; self.Destroyed = true; Dragging = false; DisconnectAll(self.Connections); if self.Frame then self.Frame:Destroy() end; Window.Controls[self.ID] = nil; Tab.Controls[self.ID] = nil end
-    Slider:SetValue(Default, false); table.insert(Tab.ControlOrder, Slider); return Slider
+local function CreateTextbox(T,S)
+    S=S or {};assert(type(S.Name)=="string" and S.Name~="","DINGOSQUAD: Textbox name must be a non-empty string");assert(S.Callback==nil or type(S.Callback)=="function","DINGOSQUAD: Textbox callback must be a function");assert(S.Default==nil or type(S.Default)=="string","DINGOSQUAD: Textbox Default must be a string")
+    local W=T.Window;local B=Register(W,T,{Name=S.Name,Type="Textbox",Value=S.Default or "",Callback=S.Callback or function() end,Connections={}})
+    B.Frame=Create("Frame",{Name="Textbox_"..B.ID,BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(0,260,0,22),Position=UDim2.new(0,28,0,Y(T)),Parent=T.ControlsContainer})
+    B.Title=Create("TextLabel",{Name="Title",BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(0,95,0,20),Text=S.Name,TextColor3=COLORS.Text,TextSize=14,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Center,Parent=B.Frame})
+    B.Input=Create("TextBox",{Name="Input",ClearTextOnFocus=false,BackgroundColor3=COLORS.ControlBackground,BorderSizePixel=1,BorderColor3=COLORS.ControlBorder,Size=UDim2.new(0,155,0,20),Position=UDim2.new(0,105,0,0),Text=B.Value,PlaceholderText=S.PlaceholderText or "",TextColor3=COLORS.Text,PlaceholderColor3=Color3.fromRGB(170,170,170),TextSize=13,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Left,Parent=B.Frame})
+    Create("UIPadding",{PaddingLeft=UDim.new(0,6),PaddingRight=UDim.new(0,6),Parent=B.Input})
+    local function Fire()local ok,e=pcall(B.Callback,B.Value);if not ok then warn("[DINGOSQUAD] Textbox callback error:",e)end end
+    function B:SetValue(V,F)if self.Destroyed then return end;assert(type(V)=="string","DINGOSQUAD: Textbox value must be a string");self.Value=V;self.Input.Text=V;if F~=false then Fire()end end
+    function B:GetValue()return self.Value end
+    function B:Clear(F)self:SetValue("",F)end
+    B.Connections[#B.Connections+1]=B.Input.FocusLost:Connect(function()B.Value=B.Input.Text;Fire()end)
+    function B:Destroy()if self.Destroyed then return end self.Destroyed=true;DisconnectAll(self.Connections);self.Frame:Destroy();W.Controls[self.ID]=nil;T.Controls[self.ID]=nil end
+    table.insert(T.ControlOrder,B);return B
 end
 
-local function CreateDropdown(Tab, Settings)
-    Settings = Settings or {}
-    assert(type(Settings.Name) == "string" and Settings.Name ~= "", "DINGOSQUAD: Dropdown name must be a non-empty string")
-    assert(type(Settings.Options) == "table", "DINGOSQUAD: Dropdown Options must be a table")
-    assert(Settings.Default == nil or type(Settings.Default) == "string", "DINGOSQUAD: Dropdown Default must be a string or nil")
-    assert(Settings.Callback == nil or type(Settings.Callback) == "function", "DINGOSQUAD: Dropdown callback must be a function")
-    local Window = Tab.Window
-    local Dropdown = {Name = Settings.Name, Type = "Dropdown", Options = {}, Value = nil, Callback = Settings.Callback or function() end, Connections = {}, Open = false}
-    for _, Option in ipairs(Settings.Options) do table.insert(Dropdown.Options, tostring(Option)) end
-    RegisterControl(Window, Tab, Dropdown)
-
-    local Container = Create("Frame", {Name = "Dropdown_" .. Dropdown.ID, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(0, 180, 0, 22), Position = UDim2.new(0, 28, 0, ControlYOffset(Tab)), Parent = Tab.ControlsContainer})
-    Dropdown.Frame = Container
-    Dropdown.Button = Create("TextButton", {
-        Name = "Button", AutoButtonColor = false, BackgroundColor3 = COLORS.ControlBackground, BorderSizePixel = 1, BorderColor3 = COLORS.ControlBorder,
-        Size = UDim2.new(0, 180, 0, 20), Text = "", TextColor3 = COLORS.Text, TextSize = 13, Font = FONTS.Main, TextXAlignment = Enum.TextXAlignment.Left, Parent = Container
-    })
-    local Title = Create("TextLabel", {Name = "Title", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(0, 75, 1, 0), Position = UDim2.new(0, 7, 0, 0), Text = Settings.Name, TextColor3 = COLORS.Text, TextSize = 13, Font = FONTS.Main, TextXAlignment = Enum.TextXAlignment.Left, Parent = Dropdown.Button})
-    Dropdown.ValueLabel = Create("TextLabel", {Name = "Value", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(0, 85, 1, 0), Position = UDim2.new(0, 88, 0, 0), TextColor3 = COLORS.Text, TextSize = 13, Font = FONTS.Main, TextXAlignment = Enum.TextXAlignment.Right, Parent = Dropdown.Button})
-    Dropdown.Arrow = Create("TextLabel", {Name = "Arrow", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(0, 15, 1, 0), Position = UDim2.new(1, -18, 0, 0), Text = "v", TextColor3 = COLORS.Text, TextSize = 12, Font = FONTS.Main, Parent = Dropdown.Button})
-    Dropdown.List = Create("Frame", {Name = "Options", Visible = false, BackgroundColor3 = COLORS.DropdownBackground, BorderSizePixel = 1, BorderColor3 = COLORS.ControlBorder, ClipsDescendants = true, Size = UDim2.new(0, 180, 0, 0), Position = UDim2.new(0, 0, 0, 21), ZIndex = 20, Parent = Container})
-    local ListLayout = Create("UIListLayout", {FillDirection = Enum.FillDirection.Vertical, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 0), Parent = Dropdown.List})
-    local function Fire() local OK, Err = pcall(Dropdown.Callback, Dropdown.Value); if not OK then warn("[DINGOSQUAD] Dropdown callback error:", Err) end end
-    local function RefreshOptions()
-        for _, Child in ipairs(Dropdown.List:GetChildren()) do if Child:IsA("TextButton") then Child:Destroy() end end
-        for Index, Option in ipairs(Dropdown.Options) do
-            local OptionButton = Create("TextButton", {Name = "Option_" .. Index, AutoButtonColor = false, BackgroundColor3 = COLORS.DropdownBackground, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 20), Text = Option, TextColor3 = COLORS.Text, TextSize = 13, Font = FONTS.Main, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 21, Parent = Dropdown.List})
-            Create("UIPadding", {PaddingLeft = UDim.new(0, 7), Parent = OptionButton})
-            Dropdown.Connections[#Dropdown.Connections + 1] = OptionButton.MouseButton1Click:Connect(function() Dropdown:SetValue(Option) end)
-        end
-        Dropdown.List.Size = UDim2.new(0, 180, 0, math.min(#Dropdown.Options * 20, 160))
-    end
-    local function UpdateVisual() Dropdown.ValueLabel.Text = Dropdown.Value or "-"; Dropdown.Arrow.Text = Dropdown.Open and "^" or "v" end
-    function Dropdown:SetValue(Value, FireCallback)
-        if self.Destroyed then return end
-        Value = tostring(Value)
-        local Found = false
-        for _, Option in ipairs(self.Options) do if Option == Value then Found = true; break end end
-        if not Found then return end
-        self.Value = Value; self.Open = false; self.List.Visible = false; UpdateVisual(); if FireCallback ~= false then Fire() end
-    end
-    function Dropdown:GetValue() return self.Value end
-    function Dropdown:SetOptions(Options)
-        assert(type(Options) == "table", "DINGOSQUAD: Dropdown Options must be a table")
-        self.Options = {}; for _, Option in ipairs(Options) do table.insert(self.Options, tostring(Option)) end
-        self.Value = nil; if self.Options[1] then self.Value = self.Options[1] end; RefreshOptions(); UpdateVisual()
-    end
-    Dropdown.Connections[#Dropdown.Connections + 1] = Dropdown.Button.MouseButton1Click:Connect(function()
-        if Dropdown.Destroyed then return end
-        Dropdown.Open = not Dropdown.Open; Dropdown.List.Visible = Dropdown.Open; UpdateVisual()
-    end)
-    function Dropdown:Destroy()
-        if self.Destroyed then return end
-        self.Destroyed = true; self.Open = false; DisconnectAll(self.Connections); if self.Frame then self.Frame:Destroy() end
-        Window.Controls[self.ID] = nil; Tab.Controls[self.ID] = nil
-    end
-    RefreshOptions()
-    if Settings.Default ~= nil then Dropdown:SetValue(Settings.Default, false) elseif Dropdown.Options[1] then Dropdown:SetValue(Dropdown.Options[1], false) end
-    table.insert(Tab.ControlOrder, Dropdown)
-    return Dropdown
+local function NewTab(W,Name)
+    W.NextTabID+=1;return{ID=W.NextTabID,Name=Name,Window=W,Controls={},ControlOrder={},Connections={},Destroyed=false}
+end
+local function API(T)
+    function T:CreateButton(S)return CreateButton(self,S)end
+    function T:CreateToggle(S)return CreateToggle(self,S)end
+    function T:CreateSlider(S)return CreateSlider(self,S)end
+    function T:CreateDropdown(S)return CreateDropdown(self,S)end
+    function T:CreateTextbox(S)return CreateTextbox(self,S)end
+    return T
 end
 
-local function CreateTabObject(Window, Name)
-    Window.NextTabID += 1
-    return {ID = Window.NextTabID, Name = Name, Window = Window, Frame = nil, Button = nil, Controls = {}, ControlOrder = {}, Connections = {}, Destroyed = false}
+local function NewWindow(S)
+    S=S or {};local W={Name=S.Name or "DINGOSQUAD",ActivationColor=S.ActivationColor or DEFAULT_ACTIVATION_COLOR,Tabs={},Controls={},State={Tabs={},Controls={}},Connections={},Destroyed=false,ActiveTab=nil,NextTabID=0,NextControlID=0};CreateWindowUI(W)
+    function W:SelectTab(T)if self.Destroyed or not T or T.Destroyed then return end;if self.ActiveTab then self.ActiveTab.Frame.Visible=false;self.ActiveTab.Button.TextColor3=COLORS.Text end;self.ActiveTab=T;T.Frame.Visible=true;T.Button.TextColor3=self.ActivationColor end
+    function W:CreateTab(Name)assert(type(Name)=="string" and Name~="","DINGOSQUAD: Tab name must be a non-empty string");local T=API(NewTab(self,Name));CreateTabFrame(self,T);T.Button=Create("TextButton",{Name="Tab_"..T.ID,AutoButtonColor=false,BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(0,86,0,24),Text=Name,TextColor3=COLORS.Text,TextSize=16,Font=FONTS.Main,Parent=self.DynamicTabContainer});T.Connections[#T.Connections+1]=T.Button.MouseButton1Click:Connect(function()self:SelectTab(T)end);table.insert(self.Tabs,T);self.State.Tabs[T.ID]={Name=T.Name};if #self.Tabs==1 then self:SelectTab(T)end;return T end
+    function W:GetTab(Name)for _,T in ipairs(self.Tabs)do if T.Name==Name then return T end end end
+    function W:SetActivationColor(C)assert(typeof(C)=="Color3","DINGOSQUAD: ActivationColor must be a Color3");self.ActivationColor=C;if self.ActiveTab then self.ActiveTab.Button.TextColor3=C end;for _,X in pairs(self.Controls)do if X.Type=="Toggle" and X.ToggleButton and X.Value then X.ToggleButton.BackgroundColor3=C elseif X.Type=="Slider" then X.Fill.BackgroundColor3=C;X.Knob.BackgroundColor3=C end end end
+    function W:GetTabCount()return #self.Tabs end
+    function W:Destroy()if self.Destroyed then return end self.Destroyed=true;DisconnectAll(self.Connections);if self.ScreenGui then self.ScreenGui:Destroy()end;table.clear(self.Tabs);table.clear(self.Controls);table.clear(self.State.Tabs);table.clear(self.State.Controls)end
+    return W
 end
-
-local function AddTabAPI(Tab)
-    function Tab:CreateButton(Settings) return CreateButton(self, Settings) end
-    function Tab:CreateToggle(Settings) return CreateToggle(self, Settings) end
-    function Tab:CreateSlider(Settings) return CreateSlider(self, Settings) end
-    function Tab:CreateDropdown(Settings) return CreateDropdown(self, Settings) end
-    return Tab
-end
-
-local function CreateWindowObject(Settings)
-    Settings = Settings or {}
-    local Window = {Name = Settings.Name or "DINGOSQUAD", ActivationColor = Settings.ActivationColor or DEFAULT_ACTIVATION_COLOR, Tabs = {}, Controls = {}, State = {Tabs = {}, Controls = {}}, Connections = {}, Destroyed = false, ActiveTab = nil, NextTabID = 0, NextControlID = 0}
-    CreateWindowUI(Window)
-    function Window:SelectTab(Tab)
-        if self.Destroyed or not Tab or Tab.Destroyed then return end
-        if self.ActiveTab then if self.ActiveTab.Frame then self.ActiveTab.Frame.Visible = false end; if self.ActiveTab.Button then self.ActiveTab.Button.TextColor3 = COLORS.Text end end
-        self.ActiveTab = Tab; Tab.Frame.Visible = true; Tab.Button.TextColor3 = self.ActivationColor
-    end
-    function Window:CreateTab(Name)
-        assert(type(Name) == "string" and Name ~= "", "DINGOSQUAD: Tab name must be a non-empty string")
-        for _, Existing in ipairs(self.Tabs) do if Existing.Name == Name then error("DINGOSQUAD: A tab named '" .. Name .. "' already exists") end end
-        local Tab = AddTabAPI(CreateTabObject(self, Name)); CreateTabFrame(self, Tab)
-        Tab.Button = Create("TextButton", {Name = "Tab_" .. Tab.ID, AutoButtonColor = false, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(0, 86, 0, 24), Text = Name, TextColor3 = COLORS.Text, TextSize = 16, Font = FONTS.Main, Parent = self.DynamicTabContainer})
-        Tab.Connections[#Tab.Connections + 1] = Tab.Button.MouseButton1Click:Connect(function() self:SelectTab(Tab) end)
-        table.insert(self.Tabs, Tab); self.State.Tabs[Tab.ID] = {Name = Tab.Name}; if #self.Tabs == 1 then self:SelectTab(Tab) end
-        return Tab
-    end
-    function Window:GetTab(Name) for _, Tab in ipairs(self.Tabs) do if Tab.Name == Name then return Tab end end end
-    function Window:SetActivationColor(Color)
-        assert(typeof(Color) == "Color3", "DINGOSQUAD: ActivationColor must be a Color3")
-        self.ActivationColor = Color
-        if self.ActiveTab and self.ActiveTab.Button then self.ActiveTab.Button.TextColor3 = Color end
-        for _, Control in pairs(self.Controls) do
-            if Control.Type == "Toggle" and Control.ToggleButton and Control.Value then Control.ToggleButton.BackgroundColor3 = Color
-            elseif Control.Type == "Slider" and Control.Fill and Control.Knob then Control.Fill.BackgroundColor3 = Color; Control.Knob.BackgroundColor3 = Color end
-        end
-    end
-    function Window:GetTabCount() return #self.Tabs end
-    function Window:DestroyTab(Tab)
-        if not Tab or Tab.Destroyed then return end
-        local Controls = {}; for _, Control in pairs(Tab.Controls) do table.insert(Controls, Control) end; for _, Control in ipairs(Controls) do Control:Destroy() end
-        Tab.Destroyed = true; DisconnectAll(Tab.Connections); if Tab.Button then Tab.Button:Destroy() end; if Tab.Frame then Tab.Frame:Destroy() end; self.State.Tabs[Tab.ID] = nil
-        for Index, Existing in ipairs(self.Tabs) do if Existing == Tab then table.remove(self.Tabs, Index); break end end
-        if self.ActiveTab == Tab then self.ActiveTab = nil; if self.Tabs[1] then self:SelectTab(self.Tabs[1]) end end
-    end
-    function Window:GetState() return self.State end
-    function Window:Destroy()
-        if self.Destroyed then return end
-        local Tabs = table.clone(self.Tabs); self.Destroyed = true
-        for _, Tab in ipairs(Tabs) do local Controls = {}; for _, Control in pairs(Tab.Controls) do table.insert(Controls, Control) end; for _, Control in ipairs(Controls) do Control:Destroy() end; DisconnectAll(Tab.Connections) end
-        DisconnectAll(self.Connections); if self.ScreenGui then self.ScreenGui:Destroy() end; table.clear(self.Tabs); table.clear(self.Controls); table.clear(self.State.Tabs); table.clear(self.State.Controls)
-    end
-    return Window
-end
-
-function Library:CreateWindow(Settings) local Window = CreateWindowObject(Settings); table.insert(self.Windows, Window); return Window end
-function Library:GetWindows() return self.Windows end
-function Library:DestroyAll() local Windows = table.clone(self.Windows); for _, Window in ipairs(Windows) do Window:Destroy() end; table.clear(self.Windows) end
-
+function Library:CreateWindow(S)local W=NewWindow(S);table.insert(self.Windows,W);return W end
+function Library:GetWindows()return self.Windows end
+function Library:DestroyAll()for _,W in ipairs(table.clone(self.Windows))do W:Destroy()end;table.clear(self.Windows)end
 return Library
