@@ -1,14 +1,14 @@
 --[[
     DINGOSQUAD
-    Stage 2.6
-    Textbox control
+    Stage 2.7
+    Label control
 ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
-local Library = {Version = "0.2.6", Windows = {}}
+local Library = {Version = "0.2.7", Windows = {}}
 local DEFAULT_ACTIVATION_COLOR = Color3.fromRGB(150, 8, 34)
 local COLORS = {
     MainBackground = Color3.fromRGB(4,4,4), SecondaryBackground = Color3.fromRGB(9,9,9),
@@ -101,7 +101,7 @@ end
 local function CreateDropdown(T,S)
     S=S or {};assert(type(S.Name)=="string" and S.Name~="","DINGOSQUAD: Dropdown name must be a non-empty string");assert(type(S.Options)=="table","DINGOSQUAD: Dropdown Options must be a table");assert(S.Callback==nil or type(S.Callback)=="function","DINGOSQUAD: Dropdown callback must be a function")
     local W=T.Window;local B=Register(W,T,{Name=S.Name,Type="Dropdown",Options={},Value=nil,Callback=S.Callback or function() end,Connections={},Open=false});for _,O in ipairs(S.Options)do table.insert(B.Options,tostring(O))end
-    B.Frame=Create("Frame",{Name="Dropdown_"..B.ID,BackgroundTransparency=1,Size=UDim2.new(0,180,0,22),Position=UDim2.new(0,28,0,Y(T)),Parent=T.ControlsContainer});B.Button=Create("TextButton",{Name="Button",AutoButtonColor=false,BackgroundColor3=COLORS.ControlBackground,BorderSizePixel=1,BorderColor3=COLORS.ControlBorder,Size=UDim2.new(0,180,0,20),Text="",Parent=B.Frame});Create("TextLabel",{Name="Title",BackgroundTransparency=1,Size=UDim2.new(0,70,1,0),Position=UDim2.new(0,7,0,0),Text=S.Name,TextColor3=COLORS.Text,TextSize=13,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Left,Parent=B.Button});B.ValueLabel=Create("TextLabel",{Name="Value",BackgroundTransparency=1,Size=UDim2.new(0,70,1,0),Position=UDim2.new(0,78,0,0),TextColor3=COLORS.Text,TextSize=13,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Right,Parent=B.Button});B.Arrow=Create("TextLabel",{Name="Arrow",BackgroundTransparency=1,Size=UDim2.new(0,15,1,0),Position=UDim2.new(1,-18,0,0),Text="v",TextColor3=COLORS.Text,TextSize=12,Font=FONTS.Main,Parent=B.Button});B.List=Create("Frame",{Name="Options",Visible=false,BackgroundColor3=COLORS.DropdownBackground,BorderSizePixel=1,BorderColor3=COLORS.ControlBorder,ClipsDescendants=true,Size=UDim2.new(0,180,0,0),Position=UDim2.new(0,0,0,21),ZIndex=20,Parent=B.Frame});Create("UIListLayout",{Parent=B.List})
+    B.Frame=Create("Frame",{Name="Dropdown_"..B.ID,BackgroundTransparency=1,Size=UDim2.new(0,180,0,22),Position=UDim2.new(0,28,0,Y(T)),Parent=T.ControlsContainer});B.Button=Create("TextButton",{Name="Button",AutoButtonColor=false,BackgroundColor3=COLORS.ControlBackground,BorderSizePixel=1,BorderColor3=COLORS.ControlBorder,Size=UDim2.new(0,180,0,20),Text="",Parent=B.Frame});Create("TextLabel",{Name="Title",BackgroundTransparency=1,Size=UDim2.new(0,70,1,0),Position=UDim2.new(0,7,0,0),Text=S.Name,TextColor3=COLORS.Text,TextSize=13,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Left,Parent=B.Button});B.ValueLabel=Create("TextLabel",{Name="Value",BackgroundTransparency=1,Size=UDim2.new(0,60,1,0),Position=UDim2.new(0,92,0,0),TextColor3=COLORS.Text,TextSize=13,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Right,Parent=B.Button});B.Arrow=Create("TextLabel",{Name="Arrow",BackgroundTransparency=1,Size=UDim2.new(0,15,1,0),Position=UDim2.new(1,-18,0,0),Text="v",TextColor3=COLORS.Text,TextSize=12,Font=FONTS.Main,Parent=B.Button});B.List=Create("Frame",{Name="Options",Visible=false,BackgroundColor3=COLORS.DropdownBackground,BorderSizePixel=1,BorderColor3=COLORS.ControlBorder,ClipsDescendants=true,Size=UDim2.new(0,180,0,0),Position=UDim2.new(0,0,0,21),ZIndex=20,Parent=B.Frame});Create("UIListLayout",{Parent=B.List})
     local function Fire()local ok,e=pcall(B.Callback,B.Value);if not ok then warn("[DINGOSQUAD] Dropdown callback error:",e)end end;local function Visual()B.ValueLabel.Text=B.Value or "-";B.Arrow.Text=B.Open and "^" or "v" end
     local function Refresh()for _,C in ipairs(B.List:GetChildren())do if C:IsA("TextButton")then C:Destroy()end end;for I,O in ipairs(B.Options)do local X=Create("TextButton",{Name="Option_"..I,AutoButtonColor=false,BackgroundColor3=COLORS.DropdownBackground,BorderSizePixel=0,Size=UDim2.new(1,0,0,20),Text=O,TextColor3=COLORS.Text,TextSize=13,Font=FONTS.Main,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=21,Parent=B.List});Create("UIPadding",{PaddingLeft=UDim.new(0,7),Parent=X});B.Connections[#B.Connections+1]=X.MouseButton1Click:Connect(function()B:SetValue(O)end)end;B.List.Size=UDim2.new(0,180,0,math.min(#B.Options*20,160))end
     function B:SetValue(V,F)if self.Destroyed then return end;V=tostring(V);for _,O in ipairs(self.Options)do if O==V then self.Value=V;self.Open=false;self.List.Visible=false;Visual();if F~=false then Fire()end;return end end end;function B:GetValue()return self.Value end;function B:SetOptions(O)assert(type(O)=="table","DINGOSQUAD: Dropdown Options must be a table");self.Options={};for _,V in ipairs(O)do table.insert(self.Options,tostring(V))end;self.Value=self.Options[1];Refresh();Visual()end
@@ -125,6 +125,18 @@ local function CreateTextbox(T,S)
     table.insert(T.ControlOrder,B);return B
 end
 
+local function CreateLabel(T,S)
+    S=S or {}
+    assert(type(S.Text)=="string","DINGOSQUAD: Label Text must be a string")
+    local W=T.Window
+    local B=Register(W,T,{Name=S.Text,Type="Label",Value=S.Text,Connections={}})
+    B.Frame=Create("TextLabel",{Name="Label_"..B.ID,BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(0,180,0,20),Position=UDim2.new(0,28,0,Y(T)),Text=S.Text,TextColor3=COLORS.Text,TextSize=S.TextSize or 14,Font=FONTS.Main,TextXAlignment=S.TextXAlignment or Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Center,Parent=T.ControlsContainer})
+    function B:SetText(V)if self.Destroyed then return end;assert(type(V)=="string","DINGOSQUAD: Label text must be a string");self.Value=V;self.Name=V;self.Frame.Text=V end
+    function B:GetText()return self.Value end
+    function B:Destroy()if self.Destroyed then return end self.Destroyed=true;DisconnectAll(self.Connections);self.Frame:Destroy();W.Controls[self.ID]=nil;T.Controls[self.ID]=nil end
+    table.insert(T.ControlOrder,B);return B
+end
+
 local function NewTab(W,Name)
     W.NextTabID+=1;return{ID=W.NextTabID,Name=Name,Window=W,Controls={},ControlOrder={},Connections={},Destroyed=false}
 end
@@ -134,6 +146,7 @@ local function API(T)
     function T:CreateSlider(S)return CreateSlider(self,S)end
     function T:CreateDropdown(S)return CreateDropdown(self,S)end
     function T:CreateTextbox(S)return CreateTextbox(self,S)end
+    function T:CreateLabel(S)return CreateLabel(self,S)end
     return T
 end
 
