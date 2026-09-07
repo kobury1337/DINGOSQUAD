@@ -1,17 +1,18 @@
 --[[
     DINGOSQUAD
-    Stage 2.3
-    Exact toggle hierarchy/layout correction
+    Stage 2.4
+    Slider control
 
-    ToggleButton is the original control root. Its children intentionally
-    render outside the small 11x18 button, matching the converted UI.
+    Controls are intentionally kept simple and manually positioned so the
+    library can continue matching the converted ScreenGui layout.
 ]]
 
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
 local Library = {}
-Library.Version = "0.2.3"
+Library.Version = "0.2.4"
 Library.Windows = {}
 
 local DEFAULT_ACTIVATION_COLOR = Color3.fromRGB(150, 8, 34)
@@ -25,6 +26,8 @@ local COLORS = {
     ControlBorder = Color3.fromRGB(49, 49, 49),
     Text = Color3.fromRGB(255, 255, 255),
     ToggleOff = Color3.fromRGB(59, 59, 59),
+    SliderBackground = Color3.fromRGB(35, 35, 35),
+    SliderFill = Color3.fromRGB(150, 8, 34),
 }
 
 local FONTS = {
@@ -185,9 +188,6 @@ local function CreateToggle(Tab, Settings)
     Toggle.Frame = ToggleButton
     Toggle.ToggleButton = ToggleButton
 
-    -- The original ScreenGui uses an aspect-ratio constraint on the toggle.
-    -- Height is the dominant axis so the control stays 11x18 even if its
-    -- parent/layout attempts to resize it.
     Create("UIAspectRatioConstraint", {
         Name = "UIAspectRatioConstraint",
         AspectRatio = 11 / 18,
@@ -283,6 +283,200 @@ local function CreateToggle(Tab, Settings)
     return Toggle
 end
 
+local function CreateSlider(Tab, Settings)
+    Settings = Settings or {}
+    assert(type(Settings.Name) == "string" and Settings.Name ~= "", "DINGOSQUAD: Slider name must be a non-empty string")
+    assert(type(Settings.Min) == "number", "DINGOSQUAD: Slider Min must be a number")
+    assert(type(Settings.Max) == "number" and Settings.Max > Settings.Min, "DINGOSQUAD: Slider Max must be greater than Min")
+    assert(Settings.Default == nil or type(Settings.Default) == "number", "DINGOSQUAD: Slider Default must be a number")
+    assert(Settings.Increment == nil or (type(Settings.Increment) == "number" and Settings.Increment > 0), "DINGOSQUAD: Slider Increment must be greater than 0")
+    assert(Settings.Callback == nil or type(Settings.Callback) == "function", "DINGOSQUAD: Slider callback must be a function")
+
+    local Window = Tab.Window
+    local Min = Settings.Min
+    local Max = Settings.Max
+    local Increment = Settings.Increment or 1
+    local Default = Settings.Default
+    if Default == nil then Default = Min end
+
+    local Slider = {
+        Name = Settings.Name,
+        Type = "Slider",
+        Min = Min,
+        Max = Max,
+        Increment = Increment,
+        Value = Default,
+        Callback = Settings.Callback or function() end,
+        Connections = {},
+    }
+    RegisterControl(Window, Tab, Slider)
+
+    local Index = #Tab.ControlOrder + 1
+    local YOffset = 10 + ((Index - 1) * 34)
+
+    local Container = Create("Frame", {
+        Name = "Slider_" .. Slider.ID,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 180, 0, 28),
+        Position = UDim2.new(0, 28, 0, YOffset),
+        Parent = Tab.ControlsContainer,
+    })
+    Slider.Frame = Container
+
+    local Title = Create("TextLabel", {
+        Name = "Title",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 120, 0, 13),
+        Position = UDim2.new(0, 0, 0, 0),
+        Text = Settings.Name,
+        TextColor3 = COLORS.Text,
+        TextSize = 14,
+        Font = FONTS.Main,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        Parent = Container,
+    })
+    Slider.Title = Title
+
+    local ValueLabel = Create("TextLabel", {
+        Name = "Value",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 55, 0, 13),
+        Position = UDim2.new(0, 125, 0, 0),
+        Text = "",
+        TextColor3 = COLORS.Text,
+        TextSize = 13,
+        Font = FONTS.Main,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        Parent = Container,
+    })
+    Slider.ValueLabel = ValueLabel
+
+    local Track = Create("TextButton", {
+        Name = "Track",
+        AutoButtonColor = false,
+        BackgroundColor3 = COLORS.SliderBackground,
+        BorderSizePixel = 1,
+        BorderColor3 = COLORS.ControlBorder,
+        Size = UDim2.new(0, 180, 0, 8),
+        Position = UDim2.new(0, 0, 0, 17),
+        Text = "",
+        Parent = Container,
+    })
+    Slider.Track = Track
+
+    local Fill = Create("Frame", {
+        Name = "Fill",
+        BackgroundColor3 = Window.ActivationColor,
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        Parent = Track,
+    })
+    Slider.Fill = Fill
+
+    local Knob = Create("Frame", {
+        Name = "Knob",
+        BackgroundColor3 = Window.ActivationColor,
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 5, 1, 4),
+        Position = UDim2.new(0, -2, 0, -2),
+        Parent = Track,
+    })
+    Slider.Knob = Knob
+
+    local Dragging = false
+
+    local function RoundToIncrement(Value)
+        local Steps = math.floor(((Value - Min) / Increment) + 0.5)
+        return Min + (Steps * Increment)
+    end
+
+    local function ClampValue(Value)
+        return math.clamp(RoundToIncrement(Value), Min, Max)
+    end
+
+    local function FormatValue(Value)
+        if Value % 1 == 0 then
+            return tostring(math.floor(Value))
+        end
+        return string.format("%.3f", Value):gsub("0+$", ""):gsub("%.$", "")
+    end
+
+    local function UpdateVisual()
+        local Alpha = math.clamp((Slider.Value - Min) / (Max - Min), 0, 1)
+        Fill.Size = UDim2.new(Alpha, 0, 1, 0)
+        Knob.Position = UDim2.new(Alpha, -2, 0, -2)
+        Fill.BackgroundColor3 = Window.ActivationColor
+        Knob.BackgroundColor3 = Window.ActivationColor
+        ValueLabel.Text = FormatValue(Slider.Value)
+    end
+
+    local function FireCallback()
+        local Success, ErrorMessage = pcall(Slider.Callback, Slider.Value)
+        if not Success then warn("[DINGOSQUAD] Slider callback error:", ErrorMessage) end
+    end
+
+    function Slider:SetValue(Value, Fire)
+        if self.Destroyed then return end
+        assert(type(Value) == "number", "DINGOSQUAD: Slider value must be a number")
+        self.Value = ClampValue(Value)
+        UpdateVisual()
+        if Fire ~= false then FireCallback() end
+    end
+
+    function Slider:GetValue()
+        return self.Value
+    end
+
+    local function UpdateFromInput(Input)
+        local X = Input.Position.X
+        local Left = Track.AbsolutePosition.X
+        local Width = Track.AbsoluteSize.X
+        local Alpha = math.clamp((X - Left) / math.max(Width, 1), 0, 1)
+        Slider:SetValue(Min + ((Max - Min) * Alpha))
+    end
+
+    Slider.Connections[#Slider.Connections + 1] = Track.InputBegan:Connect(function(Input)
+        if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+            Dragging = true
+            UpdateFromInput(Input)
+        end
+    end)
+
+    Slider.Connections[#Slider.Connections + 1] = UserInputService.InputChanged:Connect(function(Input)
+        if not Dragging then return end
+        if Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch then
+            UpdateFromInput(Input)
+        end
+    end)
+
+    Slider.Connections[#Slider.Connections + 1] = UserInputService.InputEnded:Connect(function(Input)
+        if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+            Dragging = false
+        end
+    end)
+
+    Slider:SetValue(Default, false)
+
+    function Slider:Destroy()
+        if self.Destroyed then return end
+        self.Destroyed = true
+        Dragging = false
+        DisconnectAll(self.Connections)
+        if self.Frame then self.Frame:Destroy() end
+        Window.Controls[self.ID] = nil
+        Tab.Controls[self.ID] = nil
+    end
+
+    table.insert(Tab.ControlOrder, Slider)
+    return Slider
+end
+
 local function CreateTabObject(Window, Name)
     Window.NextTabID += 1
     return {ID = Window.NextTabID, Name = Name, Window = Window, Frame = nil, Button = nil, Controls = {}, ControlOrder = {}, Connections = {}, Destroyed = false}
@@ -291,6 +485,7 @@ end
 local function AddTabAPI(Tab)
     function Tab:CreateButton(Settings) return CreateButton(self, Settings) end
     function Tab:CreateToggle(Settings) return CreateToggle(self, Settings) end
+    function Tab:CreateSlider(Settings) return CreateSlider(self, Settings) end
     return Tab
 end
 
@@ -338,15 +533,23 @@ local function CreateWindowObject(Settings)
         for _, Tab in ipairs(self.Tabs) do if Tab.Name == Name then return Tab end end
         return nil
     end
+
     function Window:SetActivationColor(Color)
         assert(typeof(Color) == "Color3", "DINGOSQUAD: ActivationColor must be a Color3")
         self.ActivationColor = Color
         if self.ActiveTab and self.ActiveTab.Button then self.ActiveTab.Button.TextColor3 = Color end
         for _, Control in pairs(self.Controls) do
-            if Control.Type == "Toggle" and Control.ToggleButton and Control.Value then Control.ToggleButton.BackgroundColor3 = Color end
+            if Control.Type == "Toggle" and Control.ToggleButton and Control.Value then
+                Control.ToggleButton.BackgroundColor3 = Color
+            elseif Control.Type == "Slider" and Control.Fill and Control.Knob then
+                Control.Fill.BackgroundColor3 = Color
+                Control.Knob.BackgroundColor3 = Color
+            end
         end
     end
+
     function Window:GetTabCount() return #self.Tabs end
+
     function Window:DestroyTab(Tab)
         if not Tab or Tab.Destroyed then return end
         local Controls = {}
@@ -365,7 +568,9 @@ local function CreateWindowObject(Settings)
             if self.Tabs[1] then self:SelectTab(self.Tabs[1]) end
         end
     end
+
     function Window:GetState() return self.State end
+
     function Window:Destroy()
         if self.Destroyed then return end
         local Tabs = table.clone(self.Tabs)
@@ -383,6 +588,7 @@ local function CreateWindowObject(Settings)
         table.clear(self.State.Tabs)
         table.clear(self.State.Controls)
     end
+
     return Window
 end
 
@@ -391,10 +597,13 @@ function Library:CreateWindow(Settings)
     table.insert(self.Windows, Window)
     return Window
 end
+
 function Library:GetWindows() return self.Windows end
+
 function Library:DestroyAll()
     local Windows = table.clone(self.Windows)
     for _, Window in ipairs(Windows) do Window:Destroy() end
     table.clear(self.Windows)
 end
+
 return Library
