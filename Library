@@ -169,7 +169,6 @@ local function createUIAspectRatioConstraint(parent)
 	return ar
 end
 
--- Clamp number
 local function clamp(val, min, max)
 	return math.max(min, math.min(max, val))
 end
@@ -217,36 +216,288 @@ local function listConfigs()
 end
 
 -- --------------------------------------------------------------------------
--- Main Library
--- --------------------------------------------------------------------------
-local Library = {}
-
--- Registry for all controls
-Library.Controls = {} -- key = unique id, value = control data
-
 -- Internal state
+-- --------------------------------------------------------------------------
+Library.Controls = {}   -- unique id -> control data
 local windowInstance = nil
 local menuVisible = true
 local activeTab = nil
 local activationColor = Color3.fromRGB(150, 8, 34)
 local menuKey = Enum.KeyCode.End
-local isDragging = false
-local dragStartPos = nil
-local dragStartMouse = nil
 
-local tabButtons = {} -- tab name -> button
-local tabFrames = {} -- tab name -> frame
+local tabButtons = {}   -- tab name -> button
+local tabFrames = {}    -- tab name -> frame
 local controlCounter = 0
-
--- Keybind display frame
 local keybindDisplayFrame = nil
-local keybindLabels = {} -- list of labels
-
--- Dropdown management: keep track of open dropdowns
 local openDropdowns = {}
 
 -- --------------------------------------------------------------------------
--- Create the main GUI
+-- switchTab and toggleMenu (defined early so buildMainGUI can reference them)
+-- --------------------------------------------------------------------------
+local function switchTab(tabName)
+	if Library._tabFrameContainer then
+		Library._tabFrameContainer.Visible = false
+	end
+	if Library._configFrame then
+		Library._configFrame.Visible = false
+	end
+	if tabName == "config" then
+		if Library._configFrame then
+			Library._configFrame.Visible = true
+		end
+	else
+		local frame = tabFrames[tabName]
+		if frame then
+			frame.Visible = true
+		end
+	end
+	activeTab = tabName
+end
+
+local function toggleMenu()
+	menuVisible = not menuVisible
+	if windowInstance then
+		windowInstance.Visible = menuVisible
+	end
+end
+
+-- --------------------------------------------------------------------------
+-- Build config tab content (must be defined before buildMainGUI)
+-- --------------------------------------------------------------------------
+local function buildConfigTabContent(configFrame)
+	-- Build label
+	local buildLabel = createInstance("TextLabel", configFrame, {
+		Name = "Build",
+		Text = "Build " .. os.date("%m/%d/%y"),
+		TextSize = 14,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		FontFace = CONST.TabButton.Font,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(0, 101, 0, 29),
+		Position = UDim2.new(0.78958, 0, 0.94391, 0),
+		BorderSizePixel = 0,
+	})
+
+	-- Dropdown for config selection
+	local dropdownBtn = createInstance("TextButton", configFrame, {
+		Name = "DropdownButton",
+		Size = CONST.Controls.Dropdown.Size,
+		Position = UDim2.new(0.05833, 0, 0.10445, 0),
+		BackgroundColor3 = CONST.Controls.Dropdown.Background,
+		BorderColor3 = CONST.Controls.Dropdown.BorderColor,
+		Text = "",
+		TextSize = CONST.Controls.Dropdown.TextSize,
+		TextColor3 = CONST.Controls.Dropdown.TextColor,
+		FontFace = CONST.Controls.Dropdown.Font,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+	local dropdownTitle = createInstance("TextLabel", dropdownBtn, {
+		Name = "Title",
+		Text = "Configs",
+		TextSize = CONST.Controls.Dropdown.TitleTextSize,
+		TextColor3 = CONST.Controls.Dropdown.TitleColor,
+		FontFace = CONST.Controls.Dropdown.TitleFont,
+		BackgroundTransparency = 1,
+		Size = CONST.Controls.Dropdown.TitleSize,
+		Position = UDim2.new(0.08181, 0, -1.31959, 0),
+		BorderSizePixel = 0,
+	})
+	local optionsFrame = createInstance("Frame", dropdownBtn, {
+		Name = "Frame",
+		Visible = false,
+		BackgroundColor3 = CONST.Controls.Dropdown.OptionsFrame.Background,
+		Size = CONST.Controls.Dropdown.OptionsFrame.Size,
+		Position = UDim2.new(0, 0, 1, 0),
+		BorderColor3 = CONST.Controls.Dropdown.OptionsFrame.BorderColor,
+	})
+
+	-- Toggle: "Show keybinds"
+	local toggleBtn = createInstance("TextButton", configFrame, {
+		Name = "ToggleButton",
+		Size = CONST.Controls.Toggle.Size,
+		Position = UDim2.new(0.53542, 0, 0.11025, 0),
+		BackgroundColor3 = CONST.Controls.Toggle.Background,
+		BorderColor3 = CONST.Controls.Toggle.BorderColor,
+		Text = "",
+		TextSize = 14,
+	})
+	createUIAspectRatioConstraint(toggleBtn)
+	local toggleTitle = createInstance("TextLabel", toggleBtn, {
+		Name = "Title",
+		Text = "Show keybinds",
+		TextSize = CONST.Controls.Toggle.TitleTextSize,
+		TextColor3 = CONST.Controls.Toggle.TitleColor,
+		FontFace = CONST.Controls.Toggle.TitleFont,
+		BackgroundTransparency = 1,
+		Size = CONST.Controls.Toggle.TitleSize,
+		Position = UDim2.new(3.45455, 0, -0.09091, 0),
+		BorderSizePixel = 0,
+	})
+	local showKeybinds = false
+	toggleBtn.MouseButton1Click:Connect(function()
+		showKeybinds = not showKeybinds
+		toggleBtn.BackgroundColor3 = showKeybinds and activationColor or CONST.Controls.Toggle.Background
+		if Library._keybindsFrame then
+			Library._keybindsFrame.Visible = showKeybinds
+		end
+	end)
+
+	-- Config Name TextBox + Save/Override/Load buttons
+	local textBox = createInstance("TextBox", configFrame, {
+		Name = "ConfigName",
+		Size = CONST.Config.TextBox.Size,
+		Position = UDim2.new(0.05833, 0, 0.2147, 0),
+		BackgroundColor3 = CONST.Config.TextBox.Background,
+		BorderColor3 = CONST.Config.TextBox.BorderColor,
+		TextSize = CONST.Config.TextBox.TextSize,
+		TextColor3 = CONST.Config.TextBox.TextColor,
+		FontFace = CONST.Config.TextBox.Font,
+		Text = "",
+		ClearTextOnFocus = false,
+	})
+	local titleTextBox = createInstance("TextLabel", textBox, {
+		Name = "Title",
+		Text = "Create Config",
+		TextSize = 14,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		FontFace = CONST.TabButton.Font,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(0, 70, 0, 13),
+		Position = UDim2.new(0.08181, 0, -0.74267, 0),
+		BorderSizePixel = 0,
+	})
+
+	local saveBtn = createInstance("TextButton", textBox, {
+		Name = "Save",
+		Size = CONST.Config.Buttons.Size,
+		Position = UDim2.new(0, 0, 1.42308, 0),
+		BackgroundColor3 = CONST.Config.Buttons.Background,
+		BorderColor3 = CONST.Config.Buttons.BorderColor,
+		Text = "Save",
+		TextSize = CONST.Config.Buttons.TextSize,
+		TextColor3 = CONST.Config.Buttons.TextColor,
+		FontFace = CONST.Config.Buttons.Font,
+	})
+	local overrideBtn = createInstance("TextButton", textBox, {
+		Name = "Override",
+		Size = CONST.Config.Buttons.Size,
+		Position = UDim2.new(0.53968, 0, 1.42308, 0),
+		BackgroundColor3 = CONST.Config.Buttons.Background,
+		BorderColor3 = CONST.Config.Buttons.BorderColor,
+		Text = "Override",
+		TextSize = CONST.Config.Buttons.TextSize,
+		TextColor3 = CONST.Config.Buttons.TextColor,
+		FontFace = CONST.Config.Buttons.Font,
+	})
+	local loadBtn = createInstance("TextButton", textBox, {
+		Name = "Load",
+		Size = CONST.Config.Buttons.Size,
+		Position = UDim2.new(0.26984, 0, 2.65385, 0),
+		BackgroundColor3 = CONST.Config.Buttons.Background,
+		BorderColor3 = CONST.Config.Buttons.BorderColor,
+		Text = "Load",
+		TextSize = CONST.Config.Buttons.TextSize,
+		TextColor3 = CONST.Config.Buttons.TextColor,
+		FontFace = CONST.Config.Buttons.Font,
+	})
+
+	-- Store references for config functions
+	Library._configDropdown = dropdownBtn
+	Library._configOptionsFrame = optionsFrame
+	Library._configTextBox = textBox
+	Library._configSave = saveBtn
+	Library._configOverride = overrideBtn
+	Library._configLoad = loadBtn
+
+	-- Populate dropdown with existing configs
+	local function refreshConfigDropdown()
+		for _, child in ipairs(optionsFrame:GetChildren()) do
+			if child:IsA("TextButton") then
+				child:Destroy()
+			end
+		end
+		local configs = listConfigs()
+		for i, name in ipairs(configs) do
+			local btn = createInstance("TextButton", optionsFrame, {
+				Name = "ConfigOption",
+				Size = CONST.Controls.Dropdown.OptionsFrame.ButtonSize,
+				Position = UDim2.new(0, 0, (i-1) * 0.30952, 0),
+				BackgroundTransparency = CONST.Controls.Dropdown.OptionsFrame.ButtonBackgroundTransparency,
+				Text = name,
+				TextSize = CONST.Controls.Dropdown.OptionsFrame.ButtonTextSize,
+				TextColor3 = CONST.Controls.Dropdown.OptionsFrame.ButtonColor,
+				FontFace = CONST.Controls.Dropdown.OptionsFrame.ButtonFont,
+				BorderSizePixel = 0,
+			})
+			btn.MouseButton1Click:Connect(function()
+				dropdownBtn.Text = name
+				optionsFrame.Visible = false
+				Library._selectedConfig = name
+				textBox.Text = name
+			end)
+		end
+	end
+
+	dropdownBtn.MouseButton1Click:Connect(function()
+		refreshConfigDropdown()
+		optionsFrame.Visible = not optionsFrame.Visible
+		for _, d in ipairs(openDropdowns) do
+			if d ~= optionsFrame then d.Visible = false end
+		end
+		table.insert(openDropdowns, optionsFrame)
+	end)
+
+	saveBtn.MouseButton1Click:Connect(function()
+		local name = textBox.Text
+		if name == "" then return end
+		local data = Library:SerializeAllControls()
+		data.Name = name
+		if saveConfig(name, data) then
+			refreshConfigDropdown()
+			dropdownBtn.Text = name
+			Library._selectedConfig = name
+		end
+	end)
+
+	overrideBtn.MouseButton1Click:Connect(function()
+		local selected = Library._selectedConfig
+		if not selected then return end
+		local newName = textBox.Text
+		local data = Library:SerializeAllControls()
+		if newName ~= "" and newName ~= selected then
+			data.Name = newName
+			saveConfig(newName, data)
+			local oldPath = CONFIG_FOLDER .. selected .. ".ds"
+			if isfile(oldPath) then
+				pcall(delfile, oldPath)
+			end
+			Library._selectedConfig = newName
+			dropdownBtn.Text = newName
+			textBox.Text = newName
+		else
+			data.Name = selected
+			saveConfig(selected, data)
+		end
+		refreshConfigDropdown()
+	end)
+
+	loadBtn.MouseButton1Click:Connect(function()
+		local name = Library._selectedConfig
+		if not name then return end
+		local data = loadConfig(name)
+		if data then
+			Library:DeserializeAllControls(data)
+			refreshConfigDropdown()
+			dropdownBtn.Text = name
+			textBox.Text = name
+		end
+	end)
+
+	refreshConfigDropdown()
+end
+
+-- --------------------------------------------------------------------------
+-- Build the main GUI (uses buildConfigTabContent, switchTab, toggleMenu)
 -- --------------------------------------------------------------------------
 local function buildMainGUI()
 	local screenGui = Instance.new("ScreenGui")
@@ -333,15 +584,8 @@ local function buildMainGUI()
 	Library._keybindsFrame = keybinds
 	Library._keybindFrame = keybindFrame
 
-	-- Build Config tab content (always present)
+	-- Build Config tab content
 	buildConfigTabContent(configFrame)
-
-	-- Create the default "Example" tab for demonstration (optional, but we'll keep it)
-	-- We'll create a tab called "Example" with sample controls to show usage
-	-- But the library is designed to be used by the user, so we might not create it automatically.
-	-- However, we want to show something. We'll create an example tab only if no tabs exist yet.
-	-- We'll expose a method to create tabs, so we won't create any by default.
-	-- The user will create their own tabs.
 
 	-- Create the Config tab button (always at bottom)
 	local configBtn = createInstance("TextButton", tabList, {
@@ -355,7 +599,6 @@ local function buildMainGUI()
 		BackgroundTransparency = CONST.TabButton.BackgroundTransparency,
 		BorderSizePixel = 0,
 	})
-	-- config button click shows configFrame
 	configBtn.MouseButton1Click:Connect(function()
 		switchTab("config")
 	end)
@@ -401,289 +644,18 @@ local function buildMainGUI()
 end
 
 -- --------------------------------------------------------------------------
--- Build config tab content (inside configFrame)
--- --------------------------------------------------------------------------
-local function buildConfigTabContent(configFrame)
-	-- Build label
-	local buildLabel = createInstance("TextLabel", configFrame, {
-		Name = "Build",
-		Text = "Build " .. os.date("%m/%d/%y"),
-		TextSize = 14,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		FontFace = CONST.TabButton.Font,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(0, 101, 0, 29),
-		Position = UDim2.new(0.78958, 0, 0.94391, 0),
-		BorderSizePixel = 0,
-	})
-
-	-- Dropdown for config selection
-	local dropdownBtn = createInstance("TextButton", configFrame, {
-		Name = "DropdownButton",
-		Size = CONST.Controls.Dropdown.Size,
-		Position = UDim2.new(0.05833, 0, 0.10445, 0),
-		BackgroundColor3 = CONST.Controls.Dropdown.Background,
-		BorderColor3 = CONST.Controls.Dropdown.BorderColor,
-		Text = "",
-		TextSize = CONST.Controls.Dropdown.TextSize,
-		TextColor3 = CONST.Controls.Dropdown.TextColor,
-		FontFace = CONST.Controls.Dropdown.Font,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	})
-	local dropdownTitle = createInstance("TextLabel", dropdownBtn, {
-		Name = "Title",
-		Text = "Configs",
-		TextSize = CONST.Controls.Dropdown.TitleTextSize,
-		TextColor3 = CONST.Controls.Dropdown.TitleColor,
-		FontFace = CONST.Controls.Dropdown.TitleFont,
-		BackgroundTransparency = 1,
-		Size = CONST.Controls.Dropdown.TitleSize,
-		Position = UDim2.new(0.08181, 0, -1.31959, 0),
-		BorderSizePixel = 0,
-	})
-	local optionsFrame = createInstance("Frame", dropdownBtn, {
-		Name = "Frame",
-		Visible = false,
-		BackgroundColor3 = CONST.Controls.Dropdown.OptionsFrame.Background,
-		Size = CONST.Controls.Dropdown.OptionsFrame.Size,
-		Position = UDim2.new(0, 0, 1, 0),
-		BorderColor3 = CONST.Controls.Dropdown.OptionsFrame.BorderColor,
-	})
-	-- We'll populate this dynamically
-
-	-- Toggle: "Show keybinds"
-	local toggleBtn = createInstance("TextButton", configFrame, {
-		Name = "ToggleButton",
-		Size = CONST.Controls.Toggle.Size,
-		Position = UDim2.new(0.53542, 0, 0.11025, 0),
-		BackgroundColor3 = CONST.Controls.Toggle.Background,
-		BorderColor3 = CONST.Controls.Toggle.BorderColor,
-		Text = "",
-		TextSize = 14,
-	})
-	createUIAspectRatioConstraint(toggleBtn)
-	local toggleTitle = createInstance("TextLabel", toggleBtn, {
-		Name = "Title",
-		Text = "Show keybinds",
-		TextSize = CONST.Controls.Toggle.TitleTextSize,
-		TextColor3 = CONST.Controls.Toggle.TitleColor,
-		FontFace = CONST.Controls.Toggle.TitleFont,
-		BackgroundTransparency = 1,
-		Size = CONST.Controls.Toggle.TitleSize,
-		Position = UDim2.new(3.45455, 0, -0.09091, 0),
-		BorderSizePixel = 0,
-	})
-	-- Toggle state
-	local showKeybinds = false
-	toggleBtn.MouseButton1Click:Connect(function()
-		showKeybinds = not showKeybinds
-		toggleBtn.BackgroundColor3 = showKeybinds and activationColor or CONST.Controls.Toggle.Background
-		Library._keybindsFrame.Visible = showKeybinds
-	end)
-
-	-- Config Name TextBox + Save/Override/Load buttons
-	local textBox = createInstance("TextBox", configFrame, {
-		Name = "ConfigName",
-		Size = CONST.Config.TextBox.Size,
-		Position = UDim2.new(0.05833, 0, 0.2147, 0),
-		BackgroundColor3 = CONST.Config.TextBox.Background,
-		BorderColor3 = CONST.Config.TextBox.BorderColor,
-		TextSize = CONST.Config.TextBox.TextSize,
-		TextColor3 = CONST.Config.TextBox.TextColor,
-		FontFace = CONST.Config.TextBox.Font,
-		Text = "",
-		ClearTextOnFocus = false,
-	})
-	local titleTextBox = createInstance("TextLabel", textBox, {
-		Name = "Title",
-		Text = "Create Config",
-		TextSize = 14,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		FontFace = CONST.TabButton.Font,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(0, 70, 0, 13),
-		Position = UDim2.new(0.08181, 0, -0.74267, 0),
-		BorderSizePixel = 0,
-	})
-
-	local saveBtn = createInstance("TextButton", textBox, {
-		Name = "Save",
-		Size = CONST.Config.Buttons.Size,
-		Position = UDim2.new(0, 0, 1.42308, 0),
-		BackgroundColor3 = CONST.Config.Buttons.Background,
-		BorderColor3 = CONST.Config.Buttons.BorderColor,
-		Text = "Save",
-		TextSize = CONST.Config.Buttons.TextSize,
-		TextColor3 = CONST.Config.Buttons.TextColor,
-		FontFace = CONST.Config.Buttons.Font,
-	})
-	local overrideBtn = createInstance("TextButton", textBox, {
-		Name = "Override",
-		Size = CONST.Config.Buttons.Size,
-		Position = UDim2.new(0.53968, 0, 1.42308, 0),
-		BackgroundColor3 = CONST.Config.Buttons.Background,
-		BorderColor3 = CONST.Config.Buttons.BorderColor,
-		Text = "Override",
-		TextSize = CONST.Config.Buttons.TextSize,
-		TextColor3 = CONST.Config.Buttons.TextColor,
-		FontFace = CONST.Config.Buttons.Font,
-	})
-	local loadBtn = createInstance("TextButton", textBox, {
-		Name = "Load",
-		Size = CONST.Config.Buttons.Size,
-		Position = UDim2.new(0.26984, 0, 2.65385, 0),
-		BackgroundColor3 = CONST.Config.Buttons.Background,
-		BorderColor3 = CONST.Config.Buttons.BorderColor,
-		Text = "Load",
-		TextSize = CONST.Config.Buttons.TextSize,
-		TextColor3 = CONST.Config.Buttons.TextColor,
-		FontFace = CONST.Config.Buttons.Font,
-	})
-
-	-- Store references for config functions
-	Library._configDropdown = dropdownBtn
-	Library._configOptionsFrame = optionsFrame
-	Library._configTextBox = textBox
-	Library._configSave = saveBtn
-	Library._configOverride = overrideBtn
-	Library._configLoad = loadBtn
-
-	-- Populate dropdown with existing configs
-	local function refreshConfigDropdown()
-		-- Clear old options
-		for _, child in ipairs(optionsFrame:GetChildren()) do
-			if child:IsA("TextButton") then
-				child:Destroy()
-			end
-		end
-		local configs = listConfigs()
-		for i, name in ipairs(configs) do
-			local btn = createInstance("TextButton", optionsFrame, {
-				Name = "ConfigOption",
-				Size = CONST.Controls.Dropdown.OptionsFrame.ButtonSize,
-				Position = UDim2.new(0, 0, (i-1) * 0.30952, 0),
-				BackgroundTransparency = CONST.Controls.Dropdown.OptionsFrame.ButtonBackgroundTransparency,
-				Text = name,
-				TextSize = CONST.Controls.Dropdown.OptionsFrame.ButtonTextSize,
-				TextColor3 = CONST.Controls.Dropdown.OptionsFrame.ButtonColor,
-				FontFace = CONST.Controls.Dropdown.OptionsFrame.ButtonFont,
-				BorderSizePixel = 0,
-			})
-			btn.MouseButton1Click:Connect(function()
-				dropdownBtn.Text = name
-				optionsFrame.Visible = false
-				-- Store selected config name
-				Library._selectedConfig = name
-				textBox.Text = name
-			end)
-		end
-	end
-
-	-- Dropdown toggle
-	dropdownBtn.MouseButton1Click:Connect(function()
-		refreshConfigDropdown()
-		optionsFrame.Visible = not optionsFrame.Visible
-		-- Close other dropdowns
-		for _, d in ipairs(openDropdowns) do
-			if d ~= optionsFrame then d.Visible = false end
-		end
-		table.insert(openDropdowns, optionsFrame)
-	end)
-
-	-- Save button
-	saveBtn.MouseButton1Click:Connect(function()
-		local name = textBox.Text
-		if name == "" then return end
-		local data = Library:SerializeAllControls()
-		data.Name = name
-		if saveConfig(name, data) then
-			refreshConfigDropdown()
-			dropdownBtn.Text = name
-			Library._selectedConfig = name
-		end
-	end)
-
-	-- Override button
-	overrideBtn.MouseButton1Click:Connect(function()
-		local selected = Library._selectedConfig
-		if not selected then return end
-		local newName = textBox.Text
-		local data = Library:SerializeAllControls()
-		if newName ~= "" and newName ~= selected then
-			-- Rename: save new, delete old
-			data.Name = newName
-			saveConfig(newName, data)
-			-- Delete old
-			local oldPath = CONFIG_FOLDER .. selected .. ".ds"
-			if isfile(oldPath) then
-				pcall(delfile, oldPath)
-			end
-			Library._selectedConfig = newName
-			dropdownBtn.Text = newName
-			textBox.Text = newName
-		else
-			data.Name = selected
-			saveConfig(selected, data)
-		end
-		refreshConfigDropdown()
-	end)
-
-	-- Load button
-	loadBtn.MouseButton1Click:Connect(function()
-		local name = Library._selectedConfig
-		if not name then return end
-		local data = loadConfig(name)
-		if data then
-			Library:DeserializeAllControls(data)
-			refreshConfigDropdown()
-			dropdownBtn.Text = name
-			textBox.Text = name
-		end
-	end)
-
-	-- Initial dropdown refresh
-	refreshConfigDropdown()
-end
-
--- --------------------------------------------------------------------------
--- Tab switching
--- --------------------------------------------------------------------------
-local function switchTab(tabName)
-	-- Hide all tab frames
-	if Library._tabFrameContainer then
-		Library._tabFrameContainer.Visible = false
-	end
-	if Library._configFrame then
-		Library._configFrame.Visible = false
-	end
-	-- Show selected
-	if tabName == "config" then
-		if Library._configFrame then
-			Library._configFrame.Visible = true
-		end
-	else
-		local frame = tabFrames[tabName]
-		if frame then
-			frame.Visible = true
-		end
-	end
-	activeTab = tabName
-end
-
--- --------------------------------------------------------------------------
--- Window object
+-- Window object and Tab methods (defined after all helper functions)
 -- --------------------------------------------------------------------------
 local Window = {}
 Window.__index = Window
 
 function Window:CreateTab(name)
-	if tabFrames[name] then return nil end -- tab already exists
+	if tabFrames[name] then return nil end
 
-	-- Create tab button
 	local btn = createInstance("TextButton", Library._tabList, {
 		Name = name,
 		Size = CONST.TabButton.Size,
-		Position = UDim2.new(0, 0, #tabButtons * 0.03482 + 0.03482, 0), -- approximate
+		Position = UDim2.new(0, 0, #tabButtons * 0.03482 + 0.03482, 0),
 		Text = name,
 		TextSize = CONST.TabButton.TextSize,
 		TextColor3 = CONST.TabButton.TextColor,
@@ -693,7 +665,6 @@ function Window:CreateTab(name)
 	})
 	tabButtons[name] = btn
 
-	-- Create tab frame
 	local frame = createInstance("Frame", Library._tabFrameContainer.Parent, {
 		Name = name .. "Frame",
 		Size = CONST.TabFrame.Size,
@@ -704,12 +675,10 @@ function Window:CreateTab(name)
 	})
 	tabFrames[name] = frame
 
-	-- Button click switches tab
 	btn.MouseButton1Click:Connect(function()
 		switchTab(name)
 	end)
 
-	-- Return a Tab object
 	local tabObj = setmetatable({}, { __index = Tab })
 	tabObj._name = name
 	tabObj._frame = frame
@@ -723,10 +692,11 @@ end
 
 function Window:ToggleVisibility()
 	menuVisible = not menuVisible
-	windowInstance.Visible = menuVisible
+	if windowInstance then
+		windowInstance.Visible = menuVisible
+	end
 end
 
--- Create window function
 function Library:CreateWindow(config)
 	config = config or {}
 	activationColor = config.ActivationColor or Color3.fromRGB(150, 8, 34)
@@ -734,12 +704,10 @@ function Library:CreateWindow(config)
 		menuKey = config.MenuKey
 	end
 
-	-- Build GUI if not already built
 	if not windowInstance then
 		buildMainGUI()
 	end
 
-	-- Ensure config folder
 	ensureConfigFolder()
 
 	local window = setmetatable({}, Window)
@@ -769,8 +737,6 @@ function Tab:CreateButton(opts)
 	btn.MouseButton1Click:Connect(function()
 		if opts.Callback then opts.Callback() end
 	end)
-	-- Register for config? Buttons don't have state, but we can still store them? We'll not save buttons.
-	-- We'll add to controls list for potential future use
 	table.insert(self._controls, { type = "Button", instance = btn, name = opts.Name })
 	return btn
 end
@@ -812,32 +778,33 @@ function Tab:CreateToggle(opts)
 		BorderSizePixel = 0,
 	})
 
-	local colorPickerBtn = createInstance("TextButton", toggleBtn, {
-		Name = "ColorPicker",
-		Size = CONST.Controls.Toggle.ColorPickerSize,
-		Position = UDim2.new(16.36364, 0, -0.36364, 0),
-		BackgroundColor3 = activationColor, -- will be updated
-		BorderColor3 = Color3.fromRGB(0,0,0),
-		Text = "",
-		TextSize = 14,
-		BorderSizePixel = 0,
-	})
+	local colorPickerBtn = nil
+	if opts.ColorPicker then
+		colorPickerBtn = createInstance("TextButton", toggleBtn, {
+			Name = "ColorPicker",
+			Size = CONST.Controls.Toggle.ColorPickerSize,
+			Position = UDim2.new(16.36364, 0, -0.36364, 0),
+			BackgroundColor3 = opts.DefaultColor or activationColor,
+			BorderColor3 = Color3.fromRGB(0,0,0),
+			Text = "",
+			TextSize = 14,
+			BorderSizePixel = 0,
+		})
+	end
 
-	-- State
 	local state = {
 		value = opts.Default or false,
-		keybind = nil, -- Enum.KeyCode or nil
-		mode = "TOGGLE", -- "ALWAYS", "TOGGLE", "HOLD"
+		keybind = nil,
+		mode = "TOGGLE",
+		color = opts.DefaultColor or activationColor,
 	}
 	local controlId = "toggle_" .. self._name .. "_" .. opts.Name
 	controlCounter = controlCounter + 1
 	local id = controlId .. "_" .. tostring(controlCounter)
 
-	-- Update toggle appearance
 	local function updateToggle()
-		toggleBtn.BackgroundColor3 = state.value and activationColor or CONST.Controls.Toggle.Background
+		toggleBtn.BackgroundColor3 = state.value and state.color or CONST.Controls.Toggle.Background
 		if opts.Callback then opts.Callback(state.value) end
-		-- Update registry
 		Library.Controls[id] = {
 			type = "Toggle",
 			value = state.value,
@@ -845,17 +812,17 @@ function Tab:CreateToggle(opts)
 			mode = state.mode,
 			name = opts.Name,
 			tab = self._name,
+			color = state.color,
+			instance = toggleBtn,
 		}
 		updateKeybindDisplay()
 	end
 
-	-- Toggle click
 	toggleBtn.MouseButton1Click:Connect(function()
 		state.value = not state.value
 		updateToggle()
 	end)
 
-	-- Keybind logic
 	local function handleKeybind(input)
 		if state.mode == "ALWAYS" then
 			state.value = true
@@ -880,13 +847,11 @@ function Tab:CreateToggle(opts)
 		end
 	end
 
-	-- Bind button: listening for key
 	local listening = false
 	bindBtn.MouseButton1Click:Connect(function()
 		if not listening then
 			listening = true
 			bindBtn.Text = "[...]"
-			-- Wait for a key
 			local connection
 			connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 				if gameProcessed then return end
@@ -901,7 +866,6 @@ function Tab:CreateToggle(opts)
 		end
 	end)
 
-	-- Right-click bind button -> show BindOptions
 	local bindOptionsFrame = createInstance("Frame", bindBtn, {
 		Name = "BindOptions",
 		Visible = false,
@@ -937,40 +901,17 @@ function Tab:CreateToggle(opts)
 		bindOptionsFrame.Visible = not bindOptionsFrame.Visible
 	end)
 
-	-- ColorPicker button opens color picker
-	colorPickerBtn.MouseButton1Click:Connect(function()
-		local color = state.value and activationColor or Color3.fromRGB(255,255,255)
-		openColorPicker(colorPickerBtn, function(newColor)
-			-- Update color picker button background
-			colorPickerBtn.BackgroundColor3 = newColor
-			-- Maybe store color in state? For toggle, we might want to store the color as a property.
-			-- But spec only says toggles have activation color. We'll store it in registry.
-			Library.Controls[id].color = newColor
-			-- Also update the toggle's activation color? The toggle uses activationColor globally.
-			-- But we might allow per-toggle color. We can store a custom color.
-			-- We'll store it and when toggle updates, we set background to that color if value true.
-			-- Override updateToggle to use state.color if set.
-			state.color = newColor
-			updateToggle()
+	if colorPickerBtn then
+		colorPickerBtn.MouseButton1Click:Connect(function()
+			local color = state.value and state.color or Color3.fromRGB(255,255,255)
+			openColorPicker(colorPickerBtn, function(newColor)
+				state.color = newColor
+				colorPickerBtn.BackgroundColor3 = newColor
+				updateToggle()
+			end)
 		end)
-	end)
+	end
 
-	-- Store state
-	self._controls[id] = state
-	Library.Controls[id] = {
-		type = "Toggle",
-		value = state.value,
-		keybind = state.keybind,
-		mode = state.mode,
-		name = opts.Name,
-		tab = self._name,
-		color = activationColor,
-	}
-
-	-- Initial update
-	updateToggle()
-
-	-- Input handling for keybinds
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if state.keybind and input.KeyCode == state.keybind then
@@ -993,6 +934,19 @@ function Tab:CreateToggle(opts)
 		end
 	end)
 
+	self._controls[id] = state
+	Library.Controls[id] = {
+		type = "Toggle",
+		value = state.value,
+		keybind = state.keybind,
+		mode = state.mode,
+		name = opts.Name,
+		tab = self._name,
+		color = state.color,
+		instance = toggleBtn,
+	}
+
+	updateToggle()
 	return toggleBtn
 end
 
@@ -1020,7 +974,6 @@ function Tab:CreateSlider(opts)
 		BorderSizePixel = 0,
 	})
 
-	-- Fill frame
 	local fill = createInstance("Frame", bar, {
 		Name = "Fill",
 		Size = UDim2.new(0, 0, 1, 0),
@@ -1028,7 +981,6 @@ function Tab:CreateSlider(opts)
 		BorderSizePixel = 0,
 	})
 
-	-- State
 	local min = opts.Min or 0
 	local max = opts.Max or 100
 	local value = opts.Default or 50
@@ -1050,12 +1002,12 @@ function Tab:CreateSlider(opts)
 			max = max,
 			name = opts.Name,
 			tab = self._name,
+			instance = bar,
 		}
 	end
 
 	updateSlider(value)
 
-	-- Click/drag to set value
 	local draggingSlider = false
 	bar.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -1080,8 +1032,7 @@ function Tab:CreateSlider(opts)
 		end
 	end)
 
-	-- Store
-	self._controls[id] = { type = "Slider", value = value }
+	self._controls[id] = { type = "Slider", value = value, instance = bar }
 	return bar
 end
 
@@ -1121,7 +1072,6 @@ function Tab:CreateDropdown(opts)
 		BorderColor3 = CONST.Controls.Dropdown.OptionsFrame.BorderColor,
 	})
 
-	-- State
 	local options = opts.Options or {}
 	local selected = opts.Default or (options[1] or "")
 	local controlId = "dropdown_" .. self._name .. "_" .. opts.Name
@@ -1138,10 +1088,10 @@ function Tab:CreateDropdown(opts)
 			options = options,
 			name = opts.Name,
 			tab = self._name,
+			instance = dropdownBtn,
 		}
 	end
 
-	-- Populate options
 	local function refreshOptions()
 		for _, child in ipairs(optionsFrame:GetChildren()) do
 			if child:IsA("TextButton") then
@@ -1168,30 +1118,24 @@ function Tab:CreateDropdown(opts)
 	end
 	refreshOptions()
 
-	-- Toggle dropdown
 	dropdownBtn.MouseButton1Click:Connect(function()
 		optionsFrame.Visible = not optionsFrame.Visible
-		-- Close other dropdowns
 		for _, d in ipairs(openDropdowns) do
 			if d ~= optionsFrame then d.Visible = false end
 		end
 		table.insert(openDropdowns, optionsFrame)
 	end)
 
-	-- Initial value
 	updateDropdown(selected)
-
-	self._controls[id] = { type = "Dropdown", value = selected }
+	self._controls[id] = { type = "Dropdown", value = selected, instance = dropdownBtn }
 	return dropdownBtn
 end
 
 function Tab:CreateColorPicker(opts)
 	opts = opts or {}
-	-- For simplicity, we can implement a color picker button that opens the color picker.
-	-- But spec mentions CreateColorPicker as a control. We'll create a button that shows the color and opens picker.
 	local btn = createInstance("TextButton", self._frame, {
 		Name = "ColorPickerButton",
-		Size = CONST.Controls.Button.Size, -- reuse button size
+		Size = CONST.Controls.Button.Size,
 		Position = UDim2.new(0.05833, 0, 0.03482 + #self._controls * 0.06, 0),
 		BackgroundColor3 = opts.Default or Color3.fromRGB(255,255,255),
 		BorderColor3 = CONST.Controls.Button.BorderColor,
@@ -1212,6 +1156,7 @@ function Tab:CreateColorPicker(opts)
 			value = newColor,
 			name = opts.Name,
 			tab = self._name,
+			instance = btn,
 		}
 	end
 
@@ -1220,15 +1165,14 @@ function Tab:CreateColorPicker(opts)
 	end)
 
 	updateColor(opts.Default or Color3.fromRGB(255,255,255))
-	self._controls[id] = { type = "ColorPicker", value = opts.Default or Color3.fromRGB(255,255,255) }
+	self._controls[id] = { type = "ColorPicker", value = opts.Default or Color3.fromRGB(255,255,255), instance = btn }
 	return btn
 end
 
 -- --------------------------------------------------------------------------
--- Color Picker
+-- Color Picker (defined after Tab methods because it uses createInstance)
 -- --------------------------------------------------------------------------
 local function openColorPicker(sourceButton, callback)
-	-- Create a color picker frame if not exists
 	local picker = Instance.findFirstChild("ColorPickerFrame")
 	if picker then picker:Destroy() end
 
@@ -1243,15 +1187,13 @@ local function openColorPicker(sourceButton, callback)
 	})
 	createUIStroke(pickerFrame, 2, Color3.fromRGB(80,80,80))
 
-	-- Color wheel (horizontal gradient)
 	local colorWheel = createInstance("ImageLabel", pickerFrame, {
 		Size = UDim2.new(0.9, 0, 0.4, 0),
 		Position = UDim2.new(0.05, 0, 0.05, 0),
 		BackgroundColor3 = Color3.fromRGB(255,255,255),
-		Image = "rbxasset://textures/ui/Gradient.png", -- We'll use a gradient image
+		Image = "rbxasset://textures/ui/Gradient.png",
 		ScaleType = Enum.ScaleType.Fit,
 	})
-	-- But we need a gradient that spans hue. We'll use a UIGradient.
 	local grad = Instance.new("UIGradient")
 	grad.Rotation = 0
 	grad.Offset = Vector2.new(0,0)
@@ -1267,7 +1209,6 @@ local function openColorPicker(sourceButton, callback)
 	})
 	grad.Parent = colorWheel
 
-	-- Brightness bar (vertical)
 	local brightnessBar = createInstance("ImageLabel", pickerFrame, {
 		Size = UDim2.new(0.05, 0, 0.4, 0),
 		Position = UDim2.new(0.9, 0, 0.05, 0),
@@ -1276,15 +1217,14 @@ local function openColorPicker(sourceButton, callback)
 		ScaleType = Enum.ScaleType.Fit,
 	})
 	local bGrad = Instance.new("UIGradient")
-	bGrad.Rotation = 270 -- vertical
+	bGrad.Rotation = 270
 	bGrad.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0,0,0)), -- we'll update this dynamically
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0,0,0)),
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(0,0,0)),
 	})
 	bGrad.Parent = brightnessBar
 
-	-- RGB inputs
 	local rgbFrame = createInstance("Frame", pickerFrame, {
 		Size = UDim2.new(0.9, 0, 0.2, 0),
 		Position = UDim2.new(0.05, 0, 0.5, 0),
@@ -1315,7 +1255,6 @@ local function openColorPicker(sourceButton, callback)
 	local gBox = createRGBBox("G", 0.35)
 	local bBox = createRGBBox("B", 0.7)
 
-	-- Preview color
 	local preview = createInstance("Frame", pickerFrame, {
 		Size = UDim2.new(0.3, 0, 0.15, 0),
 		Position = UDim2.new(0.05, 0, 0.75, 0),
@@ -1324,7 +1263,6 @@ local function openColorPicker(sourceButton, callback)
 		BorderColor3 = Color3.fromRGB(40,40,40),
 	})
 
-	-- Cancel/Apply buttons
 	local cancelBtn = createInstance("TextButton", pickerFrame, {
 		Size = UDim2.new(0.2, 0, 0.12, 0),
 		Position = UDim2.new(0.25, 0, 0.85, 0),
@@ -1344,37 +1282,30 @@ local function openColorPicker(sourceButton, callback)
 		BorderColor3 = Color3.fromRGB(40,40,40),
 	})
 
-	-- Current color state
 	local currentColor = sourceButton.BackgroundColor3 or Color3.fromRGB(255,255,255)
 	local function updateUIFromColor(color)
 		preview.BackgroundColor3 = color
 		rBox.Text = tostring(math.round(color.R * 255))
 		gBox.Text = tostring(math.round(color.G * 255))
 		bBox.Text = tostring(math.round(color.B * 255))
-		-- Update brightness bar gradient middle to color
 		local grad = brightnessBar:FindFirstChildOfClass("UIGradient")
 		if grad then
-			local midColor = color
 			grad.Color = ColorSequence.new({
 				ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)),
-				ColorSequenceKeypoint.new(0.5, midColor),
+				ColorSequenceKeypoint.new(0.5, color),
 				ColorSequenceKeypoint.new(1, Color3.fromRGB(0,0,0)),
 			})
 		end
 	end
 	updateUIFromColor(currentColor)
 
-	-- Mouse events on color wheel
 	local pickingHue = false
 	colorWheel.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			pickingHue = true
 			local pos = input.Position - colorWheel.AbsolutePosition
 			local x = clamp(pos.X / colorWheel.AbsoluteSize.X, 0, 1)
-			-- Get color from gradient at x
-			local hue = x
-			-- We'll convert hue to RGB (simplified)
-			local r, g, b = Color3.fromHSV(hue, 1, 1):GetComponents()
+			local r, g, b = Color3.fromHSV(x, 1, 1):GetComponents()
 			local color = Color3.fromRGB(r*255, g*255, b*255)
 			currentColor = color
 			updateUIFromColor(color)
@@ -1389,22 +1320,19 @@ local function openColorPicker(sourceButton, callback)
 		if pickingHue and input.UserInputType == Enum.UserInputType.MouseMovement then
 			local pos = input.Position - colorWheel.AbsolutePosition
 			local x = clamp(pos.X / colorWheel.AbsoluteSize.X, 0, 1)
-			local hue = x
-			local r, g, b = Color3.fromHSV(hue, 1, 1):GetComponents()
+			local r, g, b = Color3.fromHSV(x, 1, 1):GetComponents()
 			local color = Color3.fromRGB(r*255, g*255, b*255)
 			currentColor = color
 			updateUIFromColor(color)
 		end
 	end)
 
-	-- Brightness bar
 	local pickingBrightness = false
 	brightnessBar.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			pickingBrightness = true
 			local pos = input.Position - brightnessBar.AbsolutePosition
 			local y = clamp(pos.Y / brightnessBar.AbsoluteSize.Y, 0, 1)
-			-- Adjust brightness of currentColor
 			local h, s, v = currentColor:ToHSV()
 			v = 1 - y
 			local newColor = Color3.fromHSV(h, s, v)
@@ -1429,7 +1357,6 @@ local function openColorPicker(sourceButton, callback)
 		end
 	end)
 
-	-- RGB textboxes
 	local function onRGBChanged()
 		local r = tonumber(rBox.Text) or 0
 		local g = tonumber(gBox.Text) or 0
@@ -1445,7 +1372,6 @@ local function openColorPicker(sourceButton, callback)
 	gBox:GetPropertyChangedSignal("Text"):Connect(onRGBChanged)
 	bBox:GetPropertyChangedSignal("Text"):Connect(onRGBChanged)
 
-	-- Apply / Cancel
 	applyBtn.MouseButton1Click:Connect(function()
 		callback(currentColor)
 		pickerFrame:Destroy()
@@ -1453,42 +1379,25 @@ local function openColorPicker(sourceButton, callback)
 	cancelBtn.MouseButton1Click:Connect(function()
 		pickerFrame:Destroy()
 	end)
-
-	-- Close if clicking outside
-	UserInputService.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			local mousePos = input.Position
-			if not pickerFrame.AbsolutePosition then return end
-			local absPos = pickerFrame.AbsolutePosition
-			local absSize = pickerFrame.AbsoluteSize
-			if mousePos.X < absPos.X or mousePos.X > absPos.X + absSize.X or
-			   mousePos.Y < absPos.Y or mousePos.Y > absPos.Y + absSize.Y then
-				-- Clicked outside, do nothing? We can cancel? Better to not auto-close.
-			end
-		end
-	end)
 end
 
 -- --------------------------------------------------------------------------
 -- Keybind display update
 -- --------------------------------------------------------------------------
 local function updateKeybindDisplay()
-	-- Clear existing labels
+	if not Library._keybindFrame then return end
 	for _, child in ipairs(Library._keybindFrame:GetChildren()) do
 		if child:IsA("TextLabel") then
 			child:Destroy()
 		end
 	end
-	-- Collect all controls with keybinds
 	local keybinds = {}
 	for id, data in pairs(Library.Controls) do
 		if data.type == "Toggle" and data.keybind then
 			table.insert(keybinds, data)
 		end
 	end
-	-- Sort by name
 	table.sort(keybinds, function(a,b) return a.name < b.name end)
-	-- Create labels
 	local yOffset = 0
 	for _, data in ipairs(keybinds) do
 		local label = createInstance("TextLabel", Library._keybindFrame, {
@@ -1504,13 +1413,12 @@ local function updateKeybindDisplay()
 		})
 		yOffset = yOffset + 1
 	end
-	-- Resize keybind frame height based on count
 	local newHeight = math.max(CONST.Keybinds.Frame.Size.Y.Scale, 0.1 + yOffset * 0.1)
 	Library._keybindFrame.Size = UDim2.new(CONST.Keybinds.Frame.Size.X.Scale, 0, newHeight, 0)
 end
 
 -- --------------------------------------------------------------------------
--- Serialization / Deserialization for configs
+-- Serialization / Deserialization
 -- --------------------------------------------------------------------------
 function Library:SerializeAllControls()
 	local data = {
@@ -1542,7 +1450,6 @@ function Library:SerializeAllControls()
 		end
 		data.Controls[id] = serial
 	end
-	-- Also store tab order? We can store tab names.
 	for name, _ in pairs(tabButtons) do
 		table.insert(data.Tabs, name)
 	end
@@ -1563,22 +1470,12 @@ function Library:DeserializeAllControls(data)
 				if serial.color then
 					ctrl.color = Color3.fromRGB(serial.color[1]*255, serial.color[2]*255, serial.color[3]*255)
 				end
-				-- Need to update the UI instance
-				-- We stored the toggle button in the control data? We'll need to reference it.
-				-- In our implementation, we stored the toggle state in self._controls of the tab.
-				-- But we also need to update the visual.
-				-- We'll store a reference to the toggle button when creating.
-				-- For simplicity, we can loop through all tabs and find the control.
-				-- But we can also store the button instance in the control data.
-				-- Let's modify creation to store the button in Library.Controls[id].instance
-				-- I'll do that in the toggle creation: add instance = toggleBtn.
 				if ctrl.instance then
 					local btn = ctrl.instance
 					btn.BackgroundColor3 = ctrl.value and (ctrl.color or activationColor) or CONST.Controls.Toggle.Background
 				end
 			elseif serial.type == "Slider" then
 				ctrl.value = serial.value
-				-- Update slider fill
 				if ctrl.instance then
 					local bar = ctrl.instance
 					local fill = bar:FindFirstChild("Fill")
@@ -1602,11 +1499,10 @@ function Library:DeserializeAllControls(data)
 			end
 		end
 	end
-	-- Update keybind display
 	updateKeybindDisplay()
 end
 
 -- --------------------------------------------------------------------------
--- Expose Library
+-- Return the library
 -- --------------------------------------------------------------------------
 return Library
