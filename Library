@@ -1,7 +1,7 @@
 --[[
 	DINGOSQUAD UI LIBRARY
-	Version 1.0.1
-	Based on the original design by @uniquadev
+	Version 1.0.3
+	Fixed file I/O errors, added folder creation
 ]]
 
 local DingoSquadUI = {}
@@ -9,7 +9,6 @@ local DingoSquadUI = {}
 -- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
 -- Local player
@@ -23,32 +22,37 @@ local CONFIG_EXTENSION = ".ds"
 
 -- Internal state
 local Window = nil
-local Controls = {} -- key = controlId, value = control data
+local Controls = {}
 local ControlIdCounter = 0
 local ActiveKeybindListener = nil
 local KeybindOptionsOpen = nil
 local ActiveDropdown = nil
 local ColorPickerOpen = nil
 
--- Helper: Generate unique ID
-local function GenerateControlId()
-	ControlIdCounter = ControlIdCounter + 1
-	return "control_" .. tostring(ControlIdCounter)
+-- --------------------------------------------------------------------
+-- FILE OPERATIONS (with error handling)
+-- --------------------------------------------------------------------
+
+-- Ensure the config folder exists
+local function EnsureConfigFolder()
+	if makefolder then
+		local success, err = pcall(makefolder, CONFIG_FOLDER)
+		if not success then
+			warn("Failed to create config folder: " .. tostring(err))
+		end
+	end
 end
 
--- Helper: Get user input service key name
-local function GetKeyName(keyCode)
-	if keyCode == Enum.KeyCode.Unknown then return "?" end
-	local name = tostring(keyCode):gsub("Enum.KeyCode.", "")
-	return name
-end
-
--- Helper: Write/read config files (using executor's environment)
+-- Write a config file
 local function WriteConfigFile(name, data)
 	local path = CONFIG_FOLDER .. name .. CONFIG_EXTENSION
 	local json = HttpService:JSONEncode(data)
 	if writefile then
-		writefile(path, json)
+		local success, err = pcall(writefile, path, json)
+		if not success then
+			warn("Failed to write config: " .. tostring(err))
+			return false
+		end
 		return true
 	else
 		warn("writefile not available – config cannot be saved")
@@ -56,37 +60,69 @@ local function WriteConfigFile(name, data)
 	end
 end
 
+-- Read a config file
 local function ReadConfigFile(name)
 	local path = CONFIG_FOLDER .. name .. CONFIG_EXTENSION
 	if readfile then
 		local success, data = pcall(readfile, path)
 		if success and data then
-			local decoded = HttpService:JSONDecode(data)
-			return decoded
+			local decoded, decodeErr = pcall(HttpService.JSONDecode, HttpService, data)
+			if decoded then
+				return decoded
+			else
+				warn("Failed to decode config: " .. tostring(decodeErr))
+				return nil
+			end
+		else
+			return nil
 		end
 	end
 	return nil
 end
 
+-- List all config files
 local function ListConfigFiles()
 	local files = {}
 	if listfiles then
-		local all = listfiles(CONFIG_FOLDER)
-		for _, file in ipairs(all) do
-			if file:match(CONFIG_EXTENSION .. "$") then
-				local name = file:match("([^/]+)" .. CONFIG_EXTENSION .. "$")
-				if name then table.insert(files, name) end
+		local success, result = pcall(listfiles, CONFIG_FOLDER)
+		if success and type(result) == "table" then
+			for _, file in ipairs(result) do
+				if file:match(CONFIG_EXTENSION .. "$") then
+					local name = file:match("([^/]+)" .. CONFIG_EXTENSION .. "$")
+					if name then table.insert(files, name) end
+				end
 			end
+		else
+			-- folder might not exist, try to create it
+			EnsureConfigFolder()
 		end
 	end
 	return files
 end
 
--- ============================================================
---  UI Construction (based on the provided GUI)
--- ============================================================
+-- --------------------------------------------------------------------
+-- Helper functions
+-- --------------------------------------------------------------------
+
+local function GenerateControlId()
+	ControlIdCounter = ControlIdCounter + 1
+	return "control_" .. tostring(ControlIdCounter)
+end
+
+local function GetKeyName(keyCode)
+	if keyCode == Enum.KeyCode.Unknown then return "?" end
+	local name = tostring(keyCode):gsub("Enum.KeyCode.", "")
+	return name
+end
+
+-- --------------------------------------------------------------------
+-- UI Construction
+-- --------------------------------------------------------------------
 
 local function BuildUI()
+	-- Ensure config folder exists
+	EnsureConfigFolder()
+
 	-- Create ScreenGui
 	local screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "DingoSquadUI"
@@ -142,24 +178,24 @@ local function BuildUI()
 	buildLabel.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
 	buildLabel.Parent = tabFrame
 
-	-- Config Frame (right side, initially visible? Actually it's separate but we'll use it as a special tab)
+	-- Config Frame (right side)
 	local configFrame = Instance.new("Frame")
 	configFrame.Name = "configFrame"
 	configFrame.Size = UDim2.new(0, 480, 0, 517)
 	configFrame.Position = UDim2.new(0.23591, 0, 0.03387, 0)
 	configFrame.BackgroundColor3 = Color3.fromRGB(9, 9, 9)
 	configFrame.BorderColor3 = Color3.fromRGB(34, 39, 45)
-	configFrame.Visible = false -- will be shown when config tab is clicked
+	configFrame.Visible = false
 	configFrame.Parent = mainFrame
 
 	-- Build label for config frame
 	local configBuildLabel = buildLabel:Clone()
 	configBuildLabel.Parent = configFrame
 
-	-- Keybinds Frame (floating, initially hidden)
+	-- Keybinds Frame (floating)
 	local keybindsFrame = Instance.new("Frame")
 	keybindsFrame.Name = "Keybinds"
-	keybindsFrame.Size = UDim2.new(0, 202, 0, 100) -- will be resized dynamically
+	keybindsFrame.Size = UDim2.new(0, 202, 0, 100)
 	keybindsFrame.Position = UDim2.new(0.80536, 0, 0.23692, 0)
 	keybindsFrame.BackgroundColor3 = Color3.fromRGB(4, 4, 4)
 	keybindsFrame.BorderSizePixel = 6
@@ -183,13 +219,12 @@ local function BuildUI()
 
 	local keybindListFrame = Instance.new("Frame")
 	keybindListFrame.Name = "KeybindList"
-	keybindListFrame.Size = UDim2.new(0, 160, 0, 61) -- will be resized
+	keybindListFrame.Size = UDim2.new(0, 160, 0, 61)
 	keybindListFrame.Position = UDim2.new(0.10339, 0, 0.19, 0)
 	keybindListFrame.BackgroundColor3 = Color3.fromRGB(27, 27, 27)
 	keybindListFrame.BorderSizePixel = 0
 	keybindListFrame.Parent = keybindsFrame
 
-	-- We'll use a UIListLayout to stack keybind labels
 	local keybindLayout = Instance.new("UIListLayout")
 	keybindLayout.FillDirection = Enum.FillDirection.Vertical
 	keybindLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -197,7 +232,9 @@ local function BuildUI()
 	keybindLayout.Padding = UDim.new(0, 2)
 	keybindLayout.Parent = keybindListFrame
 
-	-- Store references in a table
+	-- --------------------------------------------------------------------
+	-- Window table (will be returned)
+	-- --------------------------------------------------------------------
 	local window = {
 		ScreenGui = screenGui,
 		MainFrame = mainFrame,
@@ -208,22 +245,20 @@ local function BuildUI()
 		KeybindListFrame = keybindListFrame,
 		KeybindLayout = keybindLayout,
 		BuildLabel = buildLabel,
-		Tabs = {}, -- tab objects
+		Tabs = {},
 		CurrentTab = nil,
 		ActivationColor = DEFAULT_ACTIVATION_COLOR,
 		ConfigDropdown = nil,
-		ConfigDropdownOptions = {},
 		ShowKeybindsToggle = nil,
 		ConfigNameBox = nil,
 	}
 
-	-- ============================================================
-	--  Internal functions (closing over window)
-	-- ============================================================
+	-- --------------------------------------------------------------------
+	-- Internal functions (closures over window)
+	-- --------------------------------------------------------------------
 
 	local function UpdateKeybindsDisplay()
 		local listFrame = window.KeybindListFrame
-		-- Clear children except UIListLayout
 		for _, child in ipairs(listFrame:GetChildren()) do
 			if child:IsA("TextLabel") then
 				child:Destroy()
@@ -234,7 +269,7 @@ local function BuildUI()
 		for id, control in pairs(Controls) do
 			if control.Type == "Toggle" and control.Keybind then
 				local label = Instance.new("TextLabel")
-				label.Size = UDim2.new(0, 160, 0, 16) -- will be auto-sized
+				label.Size = UDim2.new(0, 160, 0, 16)
 				label.BackgroundTransparency = 1
 				label.TextColor3 = Color3.fromRGB(255,255,255)
 				local keyName = GetKeyName(control.Keybind)
@@ -249,17 +284,15 @@ local function BuildUI()
 			end
 		end
 
-		-- Resize frames to fit
-		local totalHeight = 16 * count + 10 -- padding
+		local totalHeight = 16 * count + 10
 		if totalHeight < 10 then totalHeight = 10 end
 		listFrame.Size = UDim2.new(0, 160, 0, totalHeight)
-		window.KeybindsFrame.Size = UDim2.new(0, 202, 0, totalHeight + 50) -- title + padding
+		window.KeybindsFrame.Size = UDim2.new(0, 202, 0, totalHeight + 50)
 	end
 
 	local function RefreshConfigDropdown()
 		local dropdown = window.ConfigDropdown
 		if not dropdown then return end
-		-- Clear existing options (except maybe header)
 		for _, child in ipairs(dropdown.Frame:GetChildren()) do
 			if child:IsA("TextButton") then
 				child:Destroy()
@@ -291,17 +324,14 @@ local function BuildUI()
 			yOffset = yOffset + 26
 		end
 
-		-- Adjust frame height
 		dropdown.Frame.Size = UDim2.new(0, 126, 0, yOffset)
 		dropdown.Frame.Visible = false
 	end
 
 	local function SaveConfig(name)
-		-- Collect all control states
 		local state = {}
 		for id, control in pairs(Controls) do
-			local data = {}
-			data.Type = control.Type
+			local data = { Type = control.Type }
 			if control.Type == "Toggle" then
 				data.Value = control.ToggleButton.Active
 				if control.Keybind then
@@ -319,16 +349,12 @@ local function BuildUI()
 					B = control.Color.B * 255
 				}
 			elseif control.Type == "Button" then
-				-- no state to save
+				-- no state
 			end
 			state[id] = data
 		end
 
-		local configData = {
-			Name = name,
-			Controls = state
-		}
-
+		local configData = { Name = name, Controls = state }
 		local success = WriteConfigFile(name, configData)
 		if success then
 			print("Config saved: " .. name)
@@ -345,19 +371,16 @@ local function BuildUI()
 			return
 		end
 		if newName and newName ~= name then
-			-- rename: read, then write new, then delete old
 			local success = WriteConfigFile(newName, data)
 			if success then
-				-- delete old
 				local oldPath = CONFIG_FOLDER .. name .. CONFIG_EXTENSION
-				if delfile then delfile(oldPath) end
+				if delfile then pcall(delfile, oldPath) end
 				print("Config overridden and renamed to: " .. newName)
 				RefreshConfigDropdown()
 			else
 				warn("Failed to override config")
 			end
 		else
-			-- override same name
 			local success = WriteConfigFile(name, data)
 			if success then
 				print("Config overridden: " .. name)
@@ -418,11 +441,13 @@ local function BuildUI()
 			end
 		end
 
-		-- Refresh keybinds display
 		UpdateKeybindsDisplay()
-
 		print("Config loaded: " .. name)
 	end
+
+	-- --------------------------------------------------------------------
+	-- Build Config Frame
+	-- --------------------------------------------------------------------
 
 	local function BuildConfigFrame()
 		local cf = window.ConfigFrame
@@ -453,18 +478,16 @@ local function BuildUI()
 
 		local dropdownFrame = Instance.new("Frame")
 		dropdownFrame.Name = "Frame"
-		dropdownFrame.Size = UDim2.new(0, 126, 0, 84) -- will adjust
+		dropdownFrame.Size = UDim2.new(0, 126, 0, 84)
 		dropdownFrame.Position = UDim2.new(0, 0, 1, 0)
 		dropdownFrame.BackgroundColor3 = Color3.fromRGB(59, 59, 59)
 		dropdownFrame.BorderColor3 = Color3.fromRGB(49, 49, 49)
 		dropdownFrame.Visible = false
 		dropdownFrame.Parent = dropdownBtn
 
-		-- Store dropdown references
 		window.ConfigDropdown = {
 			Button = dropdownBtn,
 			Frame = dropdownFrame,
-			Options = {}, -- list of option buttons
 			Selected = nil,
 		}
 
@@ -531,10 +554,8 @@ local function BuildUI()
 		loadBtn.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
 		loadBtn.Parent = configName
 
-		-- Store references
 		window.ConfigNameBox = configName
 
-		-- Button events
 		saveBtn.MouseButton1Click:Connect(function()
 			local name = configName.Text:match("^%s*(.-)%s*$")
 			if name == "" then
@@ -564,9 +585,12 @@ local function BuildUI()
 			LoadConfig(selected)
 		end)
 
-		-- Populate dropdown with existing configs
 		RefreshConfigDropdown()
 	end
+
+	-- --------------------------------------------------------------------
+	-- Build Keybinds Toggle
+	-- --------------------------------------------------------------------
 
 	local function BuildConfigKeybindsToggle()
 		local cf = window.ConfigFrame
@@ -600,9 +624,7 @@ local function BuildUI()
 		toggleBtn.MouseButton1Click:Connect(function()
 			toggleActive = not toggleActive
 			window.KeybindsFrame.Visible = toggleActive
-			-- Update appearance
 			toggleBtn.BackgroundColor3 = toggleActive and window.ActivationColor or Color3.fromRGB(59,59,59)
-			-- Refresh keybinds list
 			if toggleActive then
 				UpdateKeybindsDisplay()
 			end
@@ -611,9 +633,9 @@ local function BuildUI()
 		window.ShowKeybindsToggle = toggleBtn
 	end
 
-	-- ============================================================
-	--  Tab Creation
-	-- ============================================================
+	-- --------------------------------------------------------------------
+	-- Tab Creation (and control methods)
+	-- --------------------------------------------------------------------
 
 	local function CreateTab(name)
 		local tabFrame = window.TabFrame:Clone()
@@ -621,7 +643,6 @@ local function BuildUI()
 		tabFrame.Visible = false
 		tabFrame.Parent = window.MainFrame
 
-		-- Create tab button
 		local btn = Instance.new("TextButton")
 		btn.Name = name
 		btn.Size = UDim2.new(0, 86, 0, 24)
@@ -632,16 +653,14 @@ local function BuildUI()
 		btn.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
 		btn.Parent = window.TabList
 
-		-- Reposition all tab buttons (insert before config)
+		-- Reposition all tab buttons
 		local children = {}
 		for _, child in ipairs(window.TabList:GetChildren()) do
 			if child:IsA("TextButton") then
 				table.insert(children, child)
 			end
 		end
-		table.sort(children, function(a,b)
-			return a.Position.Y.Scale < b.Position.Y.Scale
-		end)
+		table.sort(children, function(a,b) return a.Position.Y.Scale < b.Position.Y.Scale end)
 		local y = 0.03482
 		for i, child in ipairs(children) do
 			if child.Name == "config" then
@@ -652,17 +671,13 @@ local function BuildUI()
 			end
 		end
 
-		-- Click to show tab
 		btn.MouseButton1Click:Connect(function()
-			-- Hide all frames
 			window.ConfigFrame.Visible = false
 			for _, tab in ipairs(window.Tabs) do
 				tab.Frame.Visible = false
 			end
-			-- Show this tab
 			tabFrame.Visible = true
 			window.CurrentTab = tabObj
-			-- Highlight button
 			for _, b in ipairs(window.TabList:GetChildren()) do
 				if b:IsA("TextButton") then
 					b.TextColor3 = Color3.fromRGB(255,255,255)
@@ -671,24 +686,22 @@ local function BuildUI()
 			btn.TextColor3 = window.ActivationColor
 		end)
 
+		-- --------------------------------------------------------------------
 		-- Tab object with methods
+		-- --------------------------------------------------------------------
 		local tabObj = {
 			Name = name,
 			Frame = tabFrame,
 			Button = btn,
 			Controls = {},
-			ControlsCount = 0, -- for positioning
+			ControlsCount = 0,
 		}
 
-		-- ============================================================
-		--  Control Creation Methods (attached to tabObj)
-		-- ============================================================
-
-		-- Helper: create a control holder
+		-- Helper: control holder
 		local function CreateControlHolder(parent, yPos)
 			local holder = Instance.new("Frame")
 			holder.BackgroundTransparency = 1
-			holder.Size = UDim2.new(0, 480, 0, 24) -- height for most controls
+			holder.Size = UDim2.new(0, 480, 0, 24)
 			holder.Position = UDim2.new(0, 0, 0, yPos)
 			holder.Parent = parent
 			return holder
@@ -705,7 +718,7 @@ local function BuildUI()
 			local btn = Instance.new("TextButton")
 			btn.Name = "Button"
 			btn.Size = UDim2.new(0, 126, 0, 17)
-			btn.Position = UDim2.new(0.05833, 0, 0, 0) -- relative to holder
+			btn.Position = UDim2.new(0.05833, 0, 0, 0)
 			btn.BackgroundColor3 = Color3.fromRGB(59, 59, 59)
 			btn.BorderColor3 = Color3.fromRGB(49, 49, 49)
 			btn.Text = name
@@ -738,7 +751,6 @@ local function BuildUI()
 			local holder = CreateControlHolder(self.Frame, self.ControlsCount)
 			self.ControlsCount = self.ControlsCount + 24
 
-			-- Main toggle button (the square)
 			local toggleBtn = Instance.new("TextButton")
 			toggleBtn.Name = "ToggleButton"
 			toggleBtn.Size = UDim2.new(0, 11, 0, 18)
@@ -753,7 +765,6 @@ local function BuildUI()
 			local aspect = Instance.new("UIAspectRatioConstraint")
 			aspect.Parent = toggleBtn
 
-			-- Title label
 			local title = Instance.new("TextLabel")
 			title.Name = "Title"
 			title.Size = UDim2.new(0, 70, 0, 13)
@@ -765,7 +776,6 @@ local function BuildUI()
 			title.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
 			title.Parent = toggleBtn
 
-			-- Bind button
 			local bindBtn = Instance.new("TextButton")
 			bindBtn.Name = "Bind"
 			bindBtn.Size = UDim2.new(0, 61, 0, 13)
@@ -777,7 +787,6 @@ local function BuildUI()
 			bindBtn.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
 			bindBtn.Parent = toggleBtn
 
-			-- Bind options frame
 			local bindOptions = Instance.new("Frame")
 			bindOptions.Name = "BindOptions"
 			bindOptions.Size = UDim2.new(0, 88, 0, 77)
@@ -787,7 +796,6 @@ local function BuildUI()
 			bindOptions.Visible = false
 			bindOptions.Parent = bindBtn
 
-			-- Options: ALWAYS, TOGGLE, HOLD
 			local optionNames = {"ALWAYS", "TOGGLE", "HOLD"}
 			local yOffset = 0.06401
 			for _, optName in ipairs(optionNames) do
@@ -804,7 +812,6 @@ local function BuildUI()
 				yOffset = yOffset + 0.35
 			end
 
-			-- ColorPicker button (optional)
 			local colorPickerBtn = nil
 			if enableColorPicker then
 				colorPickerBtn = Instance.new("TextButton")
@@ -817,31 +824,26 @@ local function BuildUI()
 				colorPickerBtn.Parent = toggleBtn
 			end
 
-			-- Toggle state
 			local active = default
 			local keybind = nil
 			local mode = "TOGGLE"
 			local color = defaultColor
 
-			-- Update appearance
 			local function UpdateToggleAppearance()
 				toggleBtn.BackgroundColor3 = active and window.ActivationColor or Color3.fromRGB(59,59,59)
 				callback(active)
-				-- Update keybinds display if visible
 				if window.KeybindsFrame.Visible then
 					UpdateKeybindsDisplay()
 				end
 			end
 
-			-- Click toggle
 			toggleBtn.MouseButton1Click:Connect(function()
 				active = not active
 				UpdateToggleAppearance()
 			end)
 
-			-- Bind button click: listen for key
 			bindBtn.MouseButton1Click:Connect(function()
-				if ActiveKeybindListener then return end -- already listening
+				if ActiveKeybindListener then return end
 				bindBtn.Text = "[...]"
 				ActiveKeybindListener = function(keyCode)
 					if keyCode then
@@ -850,14 +852,12 @@ local function BuildUI()
 						ActiveKeybindListener = nil
 						UpdateKeybindsDisplay()
 					else
-						-- canceled or no key
 						bindBtn.Text = "[-]"
 						ActiveKeybindListener = nil
 					end
 				end
 			end)
 
-			-- Right-click bind button: show options
 			bindBtn.MouseButton2Click:Connect(function()
 				bindOptions.Visible = not bindOptions.Visible
 				if bindOptions.Visible then
@@ -867,7 +867,6 @@ local function BuildUI()
 				end
 			end)
 
-			-- Option buttons
 			for _, optBtn in ipairs(bindOptions:GetChildren()) do
 				if optBtn:IsA("TextButton") then
 					optBtn.MouseButton1Click:Connect(function()
@@ -879,7 +878,6 @@ local function BuildUI()
 				end
 			end
 
-			-- ColorPicker click
 			if colorPickerBtn then
 				colorPickerBtn.MouseButton1Click:Connect(function()
 					OpenColorPicker(color, function(newColor)
@@ -892,7 +890,6 @@ local function BuildUI()
 				end)
 			end
 
-			-- Store control data
 			local controlId = GenerateControlId()
 			local controlData = {
 				Type = "Toggle",
@@ -910,13 +907,11 @@ local function BuildUI()
 			}
 			Controls[controlId] = controlData
 
-			-- Init appearance
 			UpdateToggleAppearance()
-
 			return controlData
 		end
 
-		-- Slider (Bar)
+		-- Slider
 		function tabObj:CreateSlider(params)
 			local name = params.Name or "Slider"
 			local min = params.Min or 0
@@ -927,7 +922,6 @@ local function BuildUI()
 			local holder = CreateControlHolder(self.Frame, self.ControlsCount)
 			self.ControlsCount = self.ControlsCount + 24
 
-			-- Title label above?
 			local title = Instance.new("TextLabel")
 			title.Size = UDim2.new(0, 70, 0, 13)
 			title.Position = UDim2.new(0.08181, 0, 0, 0)
@@ -938,7 +932,6 @@ local function BuildUI()
 			title.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
 			title.Parent = holder
 
-			-- The bar (background)
 			local bar = Instance.new("TextButton")
 			bar.Name = "Bar"
 			bar.Size = UDim2.new(0, 143, 0, 6)
@@ -949,7 +942,6 @@ local function BuildUI()
 			bar.TextXAlignment = Enum.TextXAlignment.Left
 			bar.Parent = holder
 
-			-- Fill (child frame)
 			local fill = Instance.new("Frame")
 			fill.Name = "Fill"
 			fill.Size = UDim2.new(0, 0, 1, 0)
@@ -957,10 +949,9 @@ local function BuildUI()
 			fill.BorderSizePixel = 0
 			fill.Parent = bar
 
-			-- Value label (optional)
 			local valueLabel = Instance.new("TextLabel")
 			valueLabel.Size = UDim2.new(0, 30, 0, 13)
-			valueLabel.Position = UDim2.new(0, 150, 0, -3) -- right of bar
+			valueLabel.Position = UDim2.new(0, 150, 0, -3)
 			valueLabel.BackgroundTransparency = 1
 			valueLabel.TextColor3 = Color3.fromRGB(255,255,255)
 			valueLabel.Text = tostring(default)
@@ -968,7 +959,6 @@ local function BuildUI()
 			valueLabel.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
 			valueLabel.Parent = holder
 
-			-- Slider value
 			local sliderValue = math.clamp(default, min, max)
 
 			local function UpdateSliderAppearance()
@@ -978,7 +968,6 @@ local function BuildUI()
 				callback(sliderValue)
 			end
 
-			-- Click/drag on bar
 			local dragging = false
 			bar.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -1007,7 +996,6 @@ local function BuildUI()
 				end
 			end)
 
-			-- Store control
 			local controlId = GenerateControlId()
 			local controlData = {
 				Type = "Slider",
@@ -1069,7 +1057,6 @@ local function BuildUI()
 			dropdownFrame.Visible = false
 			dropdownFrame.Parent = dropdownBtn
 
-			-- Populate options
 			local optionButtons = {}
 			for i, opt in ipairs(options) do
 				local btn = Instance.new("TextButton")
@@ -1087,7 +1074,6 @@ local function BuildUI()
 			local selectedValue = default
 			dropdownBtn.Text = selectedValue
 
-			-- Click dropdown button: toggle frame, close others
 			dropdownBtn.MouseButton1Click:Connect(function()
 				if ActiveDropdown and ActiveDropdown ~= dropdownFrame then
 					ActiveDropdown.Visible = false
@@ -1096,7 +1082,6 @@ local function BuildUI()
 				ActiveDropdown = dropdownFrame.Visible and dropdownFrame or nil
 			end)
 
-			-- Option clicks
 			for i, btn in ipairs(optionButtons) do
 				btn.MouseButton1Click:Connect(function()
 					selectedValue = btn.Text
@@ -1104,12 +1089,10 @@ local function BuildUI()
 					dropdownFrame.Visible = false
 					ActiveDropdown = nil
 					callback(selectedValue)
-					-- Update control state
 					controlData.DropdownValue = selectedValue
 				end)
 			end
 
-			-- Store control
 			local controlId = GenerateControlId()
 			local controlData = {
 				Type = "Dropdown",
@@ -1129,37 +1112,31 @@ local function BuildUI()
 			return controlData
 		end
 
-		-- Insert tab into window's list
+		-- Insert tab
 		table.insert(window.Tabs, tabObj)
-
 		return tabObj
 	end
 
-	-- ============================================================
-	--  Color Picker (Popup)
-	-- ============================================================
+	-- --------------------------------------------------------------------
+	-- Color Picker (Popup)
+	-- --------------------------------------------------------------------
 
 	local function OpenColorPicker(currentColor, callback)
-		if ColorPickerOpen then return end -- already open
+		if ColorPickerOpen then return end
 
-		local screenGui = window.ScreenGui
-
-		-- Create overlay / popup frame
 		local popup = Instance.new("Frame")
 		popup.Size = UDim2.new(0, 300, 0, 400)
 		popup.Position = UDim2.new(0.5, -150, 0.5, -200)
 		popup.BackgroundColor3 = Color3.fromRGB(9, 9, 9)
 		popup.BorderSizePixel = 6
 		popup.BorderColor3 = Color3.fromRGB(34, 39, 45)
-		popup.Parent = screenGui
+		popup.Parent = window.ScreenGui
 
-		-- Stroke
 		local stroke = Instance.new("UIStroke")
 		stroke.Thickness = 3.4
 		stroke.Color = Color3.fromRGB(57,57,57)
 		stroke.Parent = popup
 
-		-- Title
 		local title = Instance.new("TextLabel")
 		title.Size = UDim2.new(1, 0, 0, 30)
 		title.BackgroundTransparency = 1
@@ -1169,7 +1146,6 @@ local function BuildUI()
 		title.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
 		title.Parent = popup
 
-		-- Color gradient (full spectrum)
 		local gradientFrame = Instance.new("Frame")
 		gradientFrame.Size = UDim2.new(0, 200, 0, 200)
 		gradientFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
@@ -1189,7 +1165,6 @@ local function BuildUI()
 		}
 		gradient.Parent = gradientFrame
 
-		-- Brightness slider (vertical)
 		local brightnessFrame = Instance.new("Frame")
 		brightnessFrame.Size = UDim2.new(0, 30, 0, 200)
 		brightnessFrame.Position = UDim2.new(0.8, 0, 0.1, 0)
@@ -1203,7 +1178,6 @@ local function BuildUI()
 		}
 		brightGrad.Parent = brightnessFrame
 
-		-- RGB input
 		local rBox = Instance.new("TextBox")
 		rBox.Size = UDim2.new(0, 40, 0, 20)
 		rBox.Position = UDim2.new(0.1, 0, 0.7, 0)
@@ -1213,25 +1187,16 @@ local function BuildUI()
 		rBox.TextColor3 = Color3.fromRGB(0,0,0)
 		rBox.Parent = popup
 
-		local gBox = Instance.new("TextBox")
-		gBox.Size = UDim2.new(0, 40, 0, 20)
+		local gBox = rBox:Clone()
 		gBox.Position = UDim2.new(0.35, 0, 0.7, 0)
-		gBox.BackgroundColor3 = Color3.fromRGB(59,59,59)
-		gBox.BorderColor3 = Color3.fromRGB(49,49,49)
 		gBox.Text = "0"
-		gBox.TextColor3 = Color3.fromRGB(0,0,0)
 		gBox.Parent = popup
 
-		local bBox = Instance.new("TextBox")
-		bBox.Size = UDim2.new(0, 40, 0, 20)
+		local bBox = rBox:Clone()
 		bBox.Position = UDim2.new(0.6, 0, 0.7, 0)
-		bBox.BackgroundColor3 = Color3.fromRGB(59,59,59)
-		bBox.BorderColor3 = Color3.fromRGB(49,49,49)
 		bBox.Text = "0"
-		bBox.TextColor3 = Color3.fromRGB(0,0,0)
 		bBox.Parent = popup
 
-		-- Labels
 		local rLabel = Instance.new("TextLabel")
 		rLabel.Size = UDim2.new(0, 20, 0, 20)
 		rLabel.Position = UDim2.new(0.05, 0, 0.7, 0)
@@ -1248,7 +1213,6 @@ local function BuildUI()
 		bLabel.Text = "B"
 		bLabel.Parent = popup
 
-		-- Preview color
 		local preview = Instance.new("Frame")
 		preview.Size = UDim2.new(0, 50, 0, 50)
 		preview.Position = UDim2.new(0.7, 0, 0.35, 0)
@@ -1257,7 +1221,6 @@ local function BuildUI()
 		preview.BorderColor3 = Color3.fromRGB(255,255,255)
 		preview.Parent = popup
 
-		-- Cancel and Apply buttons
 		local cancelBtn = Instance.new("TextButton")
 		cancelBtn.Size = UDim2.new(0, 80, 0, 30)
 		cancelBtn.Position = UDim2.new(0.1, 0, 0.85, 0)
@@ -1267,16 +1230,11 @@ local function BuildUI()
 		cancelBtn.TextColor3 = Color3.fromRGB(255,255,255)
 		cancelBtn.Parent = popup
 
-		local applyBtn = Instance.new("TextButton")
-		applyBtn.Size = UDim2.new(0, 80, 0, 30)
+		local applyBtn = cancelBtn:Clone()
 		applyBtn.Position = UDim2.new(0.55, 0, 0.85, 0)
-		applyBtn.BackgroundColor3 = Color3.fromRGB(59,59,59)
-		applyBtn.BorderColor3 = Color3.fromRGB(49,49,49)
 		applyBtn.Text = "Apply"
-		applyBtn.TextColor3 = Color3.fromRGB(255,255,255)
 		applyBtn.Parent = popup
 
-		-- State
 		local selectedColor = currentColor
 		local r, g, b = currentColor.R*255, currentColor.G*255, currentColor.B*255
 		rBox.Text = tostring(math.floor(r))
@@ -1290,7 +1248,6 @@ local function BuildUI()
 			bBox.Text = tostring(math.floor(selectedColor.B*255))
 		end
 
-		-- Click on gradient to pick color
 		gradientFrame.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
 				local pos = input.Position - gradientFrame.AbsolutePosition
@@ -1304,7 +1261,6 @@ local function BuildUI()
 			end
 		end)
 
-		-- Brightness slider (drag)
 		local brightDragging = false
 		brightnessFrame.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -1327,7 +1283,6 @@ local function BuildUI()
 			end
 		end)
 
-		-- RGB text boxes
 		local function OnRGBChanged(box, channel)
 			local val = tonumber(box.Text)
 			if val then
@@ -1344,13 +1299,11 @@ local function BuildUI()
 		gBox.FocusLost:Connect(function() OnRGBChanged(gBox, 2) end)
 		bBox.FocusLost:Connect(function() OnRGBChanged(bBox, 3) end)
 
-		-- Cancel
 		cancelBtn.MouseButton1Click:Connect(function()
 			popup:Destroy()
 			ColorPickerOpen = nil
 		end)
 
-		-- Apply
 		applyBtn.MouseButton1Click:Connect(function()
 			callback(selectedColor)
 			popup:Destroy()
@@ -1360,42 +1313,68 @@ local function BuildUI()
 		ColorPickerOpen = popup
 	end
 
-	-- ============================================================
-	--  Build config frame and toggle
-	-- ============================================================
+	-- --------------------------------------------------------------------
+	-- Build config and keybinds toggle
+	-- --------------------------------------------------------------------
 
 	BuildConfigFrame()
 	BuildConfigKeybindsToggle()
 
-	-- ============================================================
-	--  Window API
-	-- ============================================================
+	-- --------------------------------------------------------------------
+	-- Create config tab button (always at bottom)
+	-- --------------------------------------------------------------------
+
+	local configButton = Instance.new("TextButton")
+	configButton.Name = "config"
+	configButton.Size = UDim2.new(0, 86, 0, 24)
+	configButton.Position = UDim2.new(0, 0, 0.85687)
+	configButton.BackgroundTransparency = 1
+	configButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	configButton.Text = "config"
+	configButton.TextSize = 16
+	configButton.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
+	configButton.Parent = window.TabList
+
+	configButton.MouseButton1Click:Connect(function()
+		for _, tab in ipairs(window.Tabs) do
+			tab.Frame.Visible = false
+		end
+		window.TabFrame.Visible = false
+		window.ConfigFrame.Visible = true
+		window.CurrentTab = nil
+		for _, btn in ipairs(window.TabList:GetChildren()) do
+			if btn:IsA("TextButton") then
+				btn.TextColor3 = Color3.fromRGB(255,255,255)
+			end
+		end
+		configButton.TextColor3 = window.ActivationColor
+	end)
+
+	-- --------------------------------------------------------------------
+	-- Window API
+	-- --------------------------------------------------------------------
 
 	window.CreateTab = CreateTab
 
 	return window
 end
 
--- ============================================================
---  UserInputService key listening (global)
--- ============================================================
+-- --------------------------------------------------------------------
+-- Global keybinding listeners
+-- --------------------------------------------------------------------
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 	if input.KeyCode ~= Enum.KeyCode.Unknown then
-		-- If we have a keybind listener active
 		if ActiveKeybindListener then
 			ActiveKeybindListener(input.KeyCode)
 			ActiveKeybindListener = nil
 			return
 		end
-		-- Check for keybind triggers
 		for id, control in pairs(Controls) do
 			if control.Type == "Toggle" and control.Keybind then
 				if input.KeyCode == control.Keybind then
-					if control.Mode == "ALWAYS" then
-						-- do nothing (always on)
-					elseif control.Mode == "TOGGLE" then
+					if control.Mode == "TOGGLE" then
 						control.Active = not control.Active
 						control.UpdateAppearance()
 					elseif control.Mode == "HOLD" then
@@ -1422,7 +1401,6 @@ UserInputService.InputEnded:Connect(function(input, gameProcessed)
 	end
 end)
 
--- Close dropdowns on click outside
 UserInputService.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		if ActiveDropdown then
@@ -1450,19 +1428,18 @@ UserInputService.InputBegan:Connect(function(input)
 	end
 end)
 
--- ============================================================
---  Library API
--- ============================================================
+-- --------------------------------------------------------------------
+-- Library API
+-- --------------------------------------------------------------------
 
 function DingoSquadUI:CreateWindow(params)
-	if Window then return Window end -- only one window allowed
+	if Window then return Window end
 	local activationColor = params.ActivationColor or DEFAULT_ACTIVATION_COLOR
 	Window = BuildUI()
 	Window.ActivationColor = activationColor
 	return Window
 end
 
--- Expose controls for external access (if needed)
 DingoSquadUI.GetControls = function()
 	return Controls
 end
