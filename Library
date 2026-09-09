@@ -644,79 +644,7 @@ local function buildMainGUI()
 end
 
 -- --------------------------------------------------------------------------
--- Window object and Tab methods (defined after all helper functions)
--- --------------------------------------------------------------------------
-local Window = {}
-Window.__index = Window
-
-function Window:CreateTab(name)
-	if tabFrames[name] then return nil end
-
-	local btn = createInstance("TextButton", Library._tabList, {
-		Name = name,
-		Size = CONST.TabButton.Size,
-		Position = UDim2.new(0, 0, #tabButtons * 0.03482 + 0.03482, 0),
-		Text = name,
-		TextSize = CONST.TabButton.TextSize,
-		TextColor3 = CONST.TabButton.TextColor,
-		FontFace = CONST.TabButton.Font,
-		BackgroundTransparency = CONST.TabButton.BackgroundTransparency,
-		BorderSizePixel = 0,
-	})
-	tabButtons[name] = btn
-
-	local frame = createInstance("Frame", Library._tabFrameContainer.Parent, {
-		Name = name .. "Frame",
-		Size = CONST.TabFrame.Size,
-		Position = CONST.TabFrame.Position,
-		BackgroundColor3 = CONST.TabFrame.Background,
-		BorderColor3 = CONST.TabFrame.BorderColor,
-		Visible = false,
-	})
-	tabFrames[name] = frame
-
-	btn.MouseButton1Click:Connect(function()
-		switchTab(name)
-	end)
-
-	local tabObj = setmetatable({}, { __index = Tab })
-	tabObj._name = name
-	tabObj._frame = frame
-	tabObj._controls = {}
-	return tabObj
-end
-
-function Window:SetMenuKey(keyCode)
-	menuKey = keyCode
-end
-
-function Window:ToggleVisibility()
-	menuVisible = not menuVisible
-	if windowInstance then
-		windowInstance.Visible = menuVisible
-	end
-end
-
-function Library:CreateWindow(config)
-	config = config or {}
-	activationColor = config.ActivationColor or Color3.fromRGB(150, 8, 34)
-	if config.MenuKey then
-		menuKey = config.MenuKey
-	end
-
-	if not windowInstance then
-		buildMainGUI()
-	end
-
-	ensureConfigFolder()
-
-	local window = setmetatable({}, Window)
-	window._name = config.Name or "Menu"
-	return window
-end
-
--- --------------------------------------------------------------------------
--- Tab object (methods)
+-- Tab object (methods) – MUST be defined BEFORE Window uses it
 -- --------------------------------------------------------------------------
 local Tab = {}
 Tab.__index = Tab
@@ -1382,7 +1310,82 @@ local function openColorPicker(sourceButton, callback)
 end
 
 -- --------------------------------------------------------------------------
--- Keybind display update
+-- Window object (uses Tab, so it must be defined AFTER Tab)
+-- --------------------------------------------------------------------------
+local Window = {}
+Window.__index = Window
+
+function Window:CreateTab(name)
+	if tabFrames[name] then return nil end
+
+	local btn = createInstance("TextButton", Library._tabList, {
+		Name = name,
+		Size = CONST.TabButton.Size,
+		Position = UDim2.new(0, 0, #tabButtons * 0.03482 + 0.03482, 0),
+		Text = name,
+		TextSize = CONST.TabButton.TextSize,
+		TextColor3 = CONST.TabButton.TextColor,
+		FontFace = CONST.TabButton.Font,
+		BackgroundTransparency = CONST.TabButton.BackgroundTransparency,
+		BorderSizePixel = 0,
+	})
+	tabButtons[name] = btn
+
+	local frame = createInstance("Frame", Library._tabFrameContainer.Parent, {
+		Name = name .. "Frame",
+		Size = CONST.TabFrame.Size,
+		Position = CONST.TabFrame.Position,
+		BackgroundColor3 = CONST.TabFrame.Background,
+		BorderColor3 = CONST.TabFrame.BorderColor,
+		Visible = false,
+	})
+	tabFrames[name] = frame
+
+	btn.MouseButton1Click:Connect(function()
+		switchTab(name)
+	end)
+
+	local tabObj = setmetatable({}, { __index = Tab })
+	tabObj._name = name
+	tabObj._frame = frame
+	tabObj._controls = {}
+	return tabObj
+end
+
+function Window:SetMenuKey(keyCode)
+	menuKey = keyCode
+end
+
+function Window:ToggleVisibility()
+	menuVisible = not menuVisible
+	if windowInstance then
+		windowInstance.Visible = menuVisible
+	end
+end
+
+-- --------------------------------------------------------------------------
+-- Library:CreateWindow
+-- --------------------------------------------------------------------------
+function Library:CreateWindow(config)
+	config = config or {}
+	activationColor = config.ActivationColor or Color3.fromRGB(150, 8, 34)
+	if config.MenuKey then
+		menuKey = config.MenuKey
+	end
+
+	if not windowInstance then
+		buildMainGUI()
+	end
+
+	ensureConfigFolder()
+
+	local window = setmetatable({}, Window)
+	window._name = config.Name or "Menu"
+	return window
+end
+
+-- --------------------------------------------------------------------------
+-- Keybind display update (defined after it's referenced)
 -- --------------------------------------------------------------------------
 local function updateKeybindDisplay()
 	if not Library._keybindFrame then return end
