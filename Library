@@ -772,6 +772,38 @@ local function buildMainGUI()
 		BorderColor3 = CONST.TabList.BorderColor,
 	})
 
+	-- Container for tab buttons (leaves bottom space for config)
+	local tabsContainer = createInstance("Frame", tabList, {
+		Name = "TabsContainer",
+		Size = UDim2.new(1, 0, 1, -24),  -- leave 24px at bottom
+		Position = UDim2.new(0, 0, 0, 0),
+		BackgroundTransparency = 1,
+	})
+	-- Add UIListLayout for vertical stacking
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Vertical
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Top
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 4)  -- small gap
+	layout.Parent = tabsContainer
+
+	-- Config button (placed at bottom of TabList, outside the container)
+	local configBtn = createInstance("TextButton", tabList, {
+		Name = "config",
+		Size = CONST.TabButton.Size,
+		Position = UDim2.new(0, 0, 1, -24),  -- anchored to bottom
+		Text = "config",
+		TextSize = CONST.TabButton.TextSize,
+		TextColor3 = CONST.TabButton.TextColor,
+		FontFace = CONST.TabButton.Font,
+		BackgroundTransparency = CONST.TabButton.BackgroundTransparency,
+		BorderSizePixel = 0,
+	})
+	configBtn.MouseButton1Click:Connect(function()
+		switchTab("config")
+	end)
+
 	-- TabFrame container (hidden by default)
 	local tabFrameContainer = createInstance("Frame", main, {
 		Name = "TabFrameContainer",
@@ -827,6 +859,7 @@ local function buildMainGUI()
 	-- Store references
 	windowInstance = main
 	Library._tabList = tabList
+	Library._tabsContainer = tabsContainer
 	Library._tabFrameContainer = tabFrameContainer
 	Library._configFrame = configFrame
 	Library._keybindsFrame = keybinds
@@ -834,22 +867,6 @@ local function buildMainGUI()
 
 	-- Build Config tab content
 	buildConfigTabContent(configFrame)
-
-	-- Create the Config tab button (always at bottom)
-	local configBtn = createInstance("TextButton", tabList, {
-		Name = "config",
-		Size = CONST.TabButton.Size,
-		Position = UDim2.new(0, 0, 0.85687, 0),
-		Text = "config",
-		TextSize = CONST.TabButton.TextSize,
-		TextColor3 = CONST.TabButton.TextColor,
-		FontFace = CONST.TabButton.Font,
-		BackgroundTransparency = CONST.TabButton.BackgroundTransparency,
-		BorderSizePixel = 0,
-	})
-	configBtn.MouseButton1Click:Connect(function()
-		switchTab("config")
-	end)
 
 	-- Make the menu draggable
 	local dragging = false
@@ -992,7 +1009,7 @@ function Tab:CreateToggle(opts)
 			color = state.color,
 			instance = toggleBtn,
 		}
-		updateKeybindDisplay()  -- now defined
+		updateKeybindDisplay()
 	end
 
 	toggleBtn.MouseButton1Click:Connect(function()
@@ -1355,10 +1372,12 @@ Window.__index = Window
 function Window:CreateTab(name)
 	if tabFrames[name] then return nil end
 
-	local btn = createInstance("TextButton", Library._tabList, {
+	-- Create button in the tabs container (with layout)
+	local btn = createInstance("TextButton", Library._tabsContainer, {
 		Name = name,
 		Size = CONST.TabButton.Size,
-		Position = UDim2.new(0, 0, #tabButtons * 0.03482 + 0.03482, 0),
+		-- Position will be handled by UIListLayout; we set LayoutOrder
+		LayoutOrder = #tabButtons + 1,
 		Text = name,
 		TextSize = CONST.TabButton.TextSize,
 		TextColor3 = CONST.TabButton.TextColor,
@@ -1368,6 +1387,7 @@ function Window:CreateTab(name)
 	})
 	tabButtons[name] = btn
 
+	-- Create tab frame
 	local frame = createInstance("Frame", Library._tabFrameContainer.Parent, {
 		Name = name .. "Frame",
 		Size = CONST.TabFrame.Size,
