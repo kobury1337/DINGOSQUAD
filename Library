@@ -1,9 +1,3 @@
---[[ BitchBot UI Library
-    - Loadstring-ready
-    - Native mouse (no custom cursor)
-    - Title supplied by loader
-]]
-
 local Library = {}
 Library.__index = Library
 
