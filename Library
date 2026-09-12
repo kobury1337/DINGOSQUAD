@@ -1792,7 +1792,7 @@ function menu.Initialize(menutable)
                     local subs = string.split(tt[4], ",")
                     for i2, v in ipairs(subs) do
                         if menu.options[tt[1]][tt[2]][tt[3]][5][1][i2] == nil then break end
-                        menu.options[tt[1]][tt[2]][tt[3]][5][1][i2] = tonumber(string.gsub(v, " ", ""))
+                        menu.options[tt[1]][tt[2]][tt[3]][5][1][i2] = tonumber((string.gsub(v, " ", "")))
                         if i2 == #subs - 1 then break end
                     end
                 end
@@ -1806,7 +1806,7 @@ function menu.Initialize(menutable)
                     for i2, v in ipairs(subs) do
                         for i3, v1 in ipairs(v) do
                             if menu.options[tt[1]][tt[2]][tt[3]][5][1][i2][1][i3] == nil then break end
-                            menu.options[tt[1]][tt[2]][tt[3]][5][1][i2][1][i3] = tonumber(string.gsub(v1, " ", ""))
+                            menu.options[tt[1]][tt[2]][tt[3]][5][1][i2][1][i3] = tonumber((string.gsub(v1, " ", "")))
                             if i3 == #v - 1 then break end
                         end
                     end
