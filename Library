@@ -1,43 +1,14 @@
---[[
-    BitchBot UI Library
+--[[ BitchBot UI Library
     - Loadstring-ready
     - Native mouse (no custom cursor)
     - Title supplied by loader
-
-    Usage:
-        local UI = loadstring(game:HttpGet("URL"))()
-        UI:CreateWindow({
-            Title = "My Menu",
-            Game  = "uni",
-            Build = function(Window)
-                local Tab   = Window:CreateTab("Main")
-                local Group = Tab:CreateGroup("Aimbot", "left")
-                Group:CreateToggle("Enabled", false, {
-                    Callback   = function(v) print("toggle", v) end,
-                    Keybind    = Enum.KeyCode.M,
-                    ToggleType = 2, -- 1 hold, 2 toggle, 3 hold-off, 4 always
-                })
-                Group:CreateSlider("FOV", 0, 180, 90, {
-                    Suffix   = "°",
-                    Callback = function(v) print("fov", v) end,
-                })
-                Group:CreateDropbox("Priority", {"Head","Body","Closest"}, 1, {
-                    Callback = function(v) print("prio idx", v) end,
-                })
-                Group:CreateButton("Print", function() print("hi") end)
-                Group:CreateTextbox("Name", "default", function(t) print(t) end)
-                Group:CreateKeybind("Key", Enum.KeyCode.F, function(k) print(k) end)
-                Group:CreateColorPicker("Color", {255,0,0}, function(c) print(c) end)
-                Group:CreateDoubleColorPicker("HP", {{255,0,0},{0,255,0}}, function(a,b) print(a,b) end)
-            end,
-        })
 ]]
 
 local Library = {}
 Library.__index = Library
 
 -- =========================================================
--- Utilities
+-- Basic utilities
 -- =========================================================
 local function map(X, A, B, C, D) return (X - A) / (B - A) * (D - C) + C end
 local function clamp(a, lo, hi)
@@ -79,6 +50,92 @@ local function MultiThreadList(obj, ...)
 end
 
 -- =========================================================
+-- Constants used by Draw.*
+-- (MUST be before Draw is defined)
+-- =========================================================
+local textBoxLetters = {
+    "A","B","C","D","E","F","G","H","I","J","K","L","M",
+    "N","O","P","Q","R","S","T","U","V","W","X","Y","Z",
+}
+local keyNames = {
+    One="1", Two="2", Three="3", Four="4", Five="5", Six="6", Seven="7",
+    Eight="8", Nine="9", Zero="0", LeftBracket="[", RightBracket="]",
+    Semicolon=";", BackSlash="\\", Slash="/", Minus="-", Equals="=",
+    Return="Enter", Backquote="`", CapsLock="Caps",
+    LeftShift="LShift", RightShift="RShift",
+    LeftControl="LCtrl", RightControl="RCtrl",
+    LeftAlt="LAlt", RightAlt="RAlt", Backspace="Back",
+    Plus="+", Multiply="x", PageUp="PgUp", PageDown="PgDown",
+    Delete="Del", Insert="Ins", NumLock="NumL", Comma=",", Period=".",
+}
+local colemak = {
+    E="F", R="P", T="G", Y="J", U="L", I="U", O="Y", P=";",
+    S="R", D="S", F="T", G="D", J="N", K="E", L="I",
+    [";"]="O", N="K",
+}
+local keymodifiernames = {
+    ["`"]="~", ["1"]="!", ["2"]="@", ["3"]="#", ["4"]="$", ["5"]="%",
+    ["6"]="^", ["7"]="&", ["8"]="*", ["9"]="(", ["0"]=")",
+    ["-"]="_", ["="]="+", ["["]="{", ["]"]="}", ["\\"]="|",
+    [";"]=":", ["'"]='"', [","]="<", ["."]=".", ["/"]="?",
+}
+local invalidfilekeys = {
+    ["\\"]=true, ["/"]=true, [":"]=true, ["*"]=true, ["?"]=true,
+    ['"']=true, ["<"]=true, [">"]=true, ["|"]=true,
+}
+
+local function KeyEnumToName(key)
+    if key == nil then return "None" end
+    local _key = tostring(key).."."
+    _key = _key:gsub("%.", ",")
+    local keyname = nil
+    local looptime = 0
+    for w in _key:gmatch("(.-),") do
+        looptime += 1
+        if looptime == 3 then keyname = w end
+    end
+    if string.match(keyname, "Keypad") then keyname = string.gsub(keyname, "Keypad", "") end
+    if keyname == "Unknown" or key.Value == 27 then return "None" end
+    if keyNames[keyname] then keyname = keyNames[keyname] end
+    if Nate then return colemak[keyname] or keyname end
+    return keyname
+end
+local function KeyModifierToName(key, filename)
+    if keymodifiernames[key] ~= nil then
+        if filename then
+            if invalidfilekeys[keymodifiernames[key]] then return "" else return keymodifiernames[key] end
+        else
+            return keymodifiernames[key]
+        end
+    else
+        return ""
+    end
+end
+local function string_cut(s1, num)
+    return num == 0 and s1 or string.sub(s1, 1, num)
+end
+local function Lerp(delta, from, to)
+    if delta > 1 then return to end
+    if delta < 0 then return from end
+    return from + (to - from) * delta
+end
+local function ColorRange(value, ranges)
+    if value <= ranges[1].start then return ranges[1].color end
+    if value >= ranges[#ranges].start then return ranges[#ranges].color end
+    local selected = #ranges
+    for i = 1, #ranges - 1 do
+        if value < ranges[i + 1].start then selected = i break end
+    end
+    local minc = ranges[selected]
+    local maxc = ranges[selected + 1]
+    local lv = (value - minc.start) / (maxc.start - minc.start)
+    return Color3.new(
+        Lerp(lv, minc.color.r, maxc.color.r),
+        Lerp(lv, minc.color.g, maxc.color.g),
+        Lerp(lv, minc.color.b, maxc.color.b))
+end
+
+-- =========================================================
 -- Event system
 -- =========================================================
 local event = {}
@@ -114,14 +171,10 @@ function event.new(eventname, eventtable, requirename)
         end
         for i = j + 1, n do funcs[i] = nil end
         for i = 1, j do
-            CreateThread(function(...)
-                pcall(funcs[i], ...)
-            end, ...)
+            CreateThread(function(...) pcall(funcs[i], ...) end, ...)
         end
     end
-    if eventname then
-        allevent[eventname] = { event = newevent, fire = fire }
-    end
+    if eventname then allevent[eventname] = { event = newevent, fire = fire } end
     return newevent, fire
 end
 
@@ -263,7 +316,7 @@ do
         notes[#notes + 1] = Note
     end
 
-    local renderStepped = game:GetService("RunService").RenderStepped:Connect(function(dt)
+    game:GetService("RunService").RenderStepped:Connect(function(dt)
         local smallest = math.huge
         for k = 1, #notes do
             local v = notes[k]
@@ -289,55 +342,34 @@ end
 -- =========================================================
 local menuWidth, menuHeight = 500, 600
 local menu = {
-    w = menuWidth,
-    h = menuHeight,
-    x = 0,
-    y = 0,
+    w = menuWidth, h = menuHeight, x = 0, y = 0,
     columns = {
         width = (menuWidth - 40) / 2,
         left = 17,
         right = (menuWidth - 20) / 2 + 13,
     },
-    activetab = 1,
-    open = true,
-    fadestart = 0,
-    fading = false,
+    activetab = 1, open = true, fadestart = 0, fading = false,
     mousedown = false,
-    postable = {},
-    options = {},
+    postable = {}, options = {},
     clrs = { norm = {}, dark = {}, togz = {} },
     mc = { 127, 72, 163 },
-    watermark = {},
-    connections = {},
-    list = {},
-    unloaded = false,
-    copied_clr = nil,
-    game = "uni",
-    tabnames = {},
-    friends = {},
-    priority = {},
-    muted = {},
-    spectating = false,
-    stat_menu = false,
-    load_time = 0,
-    log_multi = nil,
-    mgrouptabz = {},
-    backspaceheld = false,
-    backspacetime = -1,
-    backspaceflags = 0,
-    selectall = false,
+    watermark = {}, connections = {}, list = {},
+    unloaded = false, copied_clr = nil,
+    game = "uni", tabnames = {}, friends = {}, priority = {}, muted = {},
+    spectating = false, stat_menu = false, load_time = 0,
+    log_multi = nil, mgrouptabz = {},
+    backspaceheld = false, backspacetime = -1, backspaceflags = 0, selectall = false,
     modkeys = { alt = { direction = nil }, shift = { direction = nil } },
     modkeydown = function(self, key, direction)
         local kd = self.modkeys[key]
         return kd.direction and kd.direction == direction or false
     end,
-    keybinds = {},
-    values = {},
+    keybinds = {}, values = {},
     title = "UI Library",
 }
 
 -- =========================================================
--- Drawing helpers
+-- Drawing helpers (now ColorRange / KeyEnumToName etc. exist)
 -- =========================================================
 local allrender = {}
 local RGB = Color3.fromRGB
@@ -540,9 +572,7 @@ do
             table.insert(selected, { postable = #menu.postable, drawn = tab[#tab] })
         end
         local length = 2
-        local selected_pos = {}
-        local click_pos = {}
-        local nametext = {}
+        local selected_pos, click_pos, nametext = {}, {}, {}
         for i, v in ipairs(names) do
             Draw:MenuBigText(v, true, false, x+4+length, y+5, tab)
             if i == 1 then tab[#tab].Color = RGB(255,255,255)
@@ -721,23 +751,17 @@ do
         Draw:MenuOutlinedRect(true, x, y+12, length, 22*maxamount+4, {30,30,30,255}, tab)
         Draw:MenuOutlinedRect(true, x+1, y+13, length-2, 22*maxamount+2, {0,0,0,255}, tab)
         Draw:MenuFilledRect(true, x+length-7, y+16, 1, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.uparrow, tab[#tab])
-        table.insert(menu.clrs.norm, tab[#tab])
+        table.insert(temptable.uparrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
         Draw:MenuFilledRect(true, x+length-8, y+17, 3, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.uparrow, tab[#tab])
-        table.insert(menu.clrs.norm, tab[#tab])
+        table.insert(temptable.uparrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
         Draw:MenuFilledRect(true, x+length-9, y+18, 5, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.uparrow, tab[#tab])
-        table.insert(menu.clrs.norm, tab[#tab])
+        table.insert(temptable.uparrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
         Draw:MenuFilledRect(true, x+length-7, y+16+(22*maxamount+4)-9, 1, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.downarrow, tab[#tab])
-        table.insert(menu.clrs.norm, tab[#tab])
+        table.insert(temptable.downarrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
         Draw:MenuFilledRect(true, x+length-8, y+16+(22*maxamount+4)-10, 3, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.downarrow, tab[#tab])
-        table.insert(menu.clrs.norm, tab[#tab])
+        table.insert(temptable.downarrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
         Draw:MenuFilledRect(true, x+length-9, y+16+(22*maxamount+4)-11, 5, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.downarrow, tab[#tab])
-        table.insert(menu.clrs.norm, tab[#tab])
+        table.insert(temptable.downarrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
         for i = 1, maxamount do
             temptable.liststuff.rows[i] = {}
             if i ~= maxamount then
@@ -793,87 +817,6 @@ do
         return tab[#tab]
     end
 end
-
--- =========================================================
--- Utility constants / key names
--- =========================================================
-local textBoxLetters = {
-    "A","B","C","D","E","F","G","H","I","J","K","L","M",
-    "N","O","P","Q","R","S","T","U","V","W","X","Y","Z",
-}
-local keyNames = {
-    One="1", Two="2", Three="3", Four="4", Five="5", Six="6", Seven="7",
-    Eight="8", Nine="9", Zero="0", LeftBracket="[", RightBracket="]",
-    Semicolon=";", BackSlash="\\", Slash="/", Minus="-", Equals="=",
-    Return="Enter", Backquote="`", CapsLock="Caps",
-    LeftShift="LShift", RightShift="RShift",
-    LeftControl="LCtrl", RightControl="RCtrl",
-    LeftAlt="LAlt", RightAlt="RAlt", Backspace="Back",
-    Plus="+", Multiply="x", PageUp="PgUp", PageDown="PgDown",
-    Delete="Del", Insert="Ins", NumLock="NumL", Comma=",", Period=".",
-}
-local colemak = {
-    E="F", R="P", T="G", Y="J", U="L", I="U", O="Y", P=";",
-    S="R", D="S", F="T", G="D", J="N", K="E", L="I",
-    [";"]="O", N="K",
-}
-local keymodifiernames = {
-    ["`"]="~", ["1"]="!", ["2"]="@", ["3"]="#", ["4"]="$", ["5"]="%",
-    ["6"]="^", ["7"]="&", ["8"]="*", ["9"]="(", ["0"]=")",
-    ["-"]="_", ["="]="+", ["["]="{", ["]"]="}", ["\\"]="|",
-    [";"]=":", ["'"]='"', [","]="<", ["."]=".", ["/"]="?",
-}
-local function KeyEnumToName(key)
-    if key == nil then return "None" end
-    local _key = tostring(key).."."
-    _key = _key:gsub("%.", ",")
-    local keyname = nil
-    local looptime = 0
-    for w in _key:gmatch("(.-),") do
-        looptime += 1
-        if looptime == 3 then keyname = w end
-    end
-    if string.match(keyname, "Keypad") then keyname = string.gsub(keyname, "Keypad", "") end
-    if keyname == "Unknown" or key.Value == 27 then return "None" end
-    if keyNames[keyname] then keyname = keyNames[keyname] end
-    if Nate then return colemak[keyname] or keyname end
-    return keyname
-end
-local invalidfilekeys = {
-    ["\\"]=true, ["/"]=true, [":"]=true, ["*"]=true, ["?"]=true,
-    ['"']=true, ["<"]=true, [">"]=true, ["|"]=true,
-}
-local function KeyModifierToName(key, filename)
-    if keymodifiernames[key] ~= nil then
-        if filename then
-            if invalidfilekeys[keymodifiernames[key]] then return "" else return keymodifiernames[key] end
-        else
-            return keymodifiernames[key]
-        end
-    else
-        return ""
-    end
-end
-local function string_cut(s1, num)
-    return num == 0 and s1 or string.sub(s1, 1, num)
-end
-local function ColorRange(value, ranges)
-    if value <= ranges[1].start then return ranges[1].color end
-    if value >= ranges[#ranges].start then return ranges[#ranges].color end
-    local selected = #ranges
-    for i = 1, #ranges-1 do
-        if value < ranges[i+1].start then selected = i break end
-    end
-    local minc = ranges[selected]
-    local maxc = ranges[selected+1]
-    local lv = (value - minc.start) / (maxc.start - minc.start)
-    local function L(a,b,t) return a + (b-a)*t end
-    return Color3.new(
-        L(minc.color.r, maxc.color.r, lv),
-        L(minc.color.g, maxc.color.g, lv),
-        L(minc.color.b, maxc.color.b, lv))
-end
-
 -- =========================================================
 -- Player / game services
 -- =========================================================
