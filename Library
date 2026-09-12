@@ -2,7 +2,7 @@ local Library = {}
 Library.__index = Library
 
 -- =========================================================================
--- Low-level utilities
+-- Utilities
 -- =========================================================================
 local function map(X, A, B, C, D) return (X - A) / (B - A) * (D - C) + C end
 local function clamp(a, lo, hi)
@@ -11,9 +11,7 @@ local function clamp(a, lo, hi)
     else return a end
 end
 local function CreateThread(f, ...)
-    local t = coroutine.create(f)
-    coroutine.resume(t, ...)
-    return t
+    local t = coroutine.create(f); coroutine.resume(t, ...); return t
 end
 local function MultiThreadList(obj, ...)
     local n = #obj
@@ -24,26 +22,20 @@ local function MultiThreadList(obj, ...)
                 local d = #t
                 assert(d ~= 0, "table inserted was not an array or was empty")
                 assert(d < 3, ("invalid number of arguments (%d)"):format(d))
-                local thetype = type(t[1])
-                assert(thetype == "function",
-                    ("invalid argument #1: expected 'function', got '%s'"):format(tostring(thetype)))
+                assert(type(t[1]) == "function",
+                    ("invalid argument #1: expected 'function', got '%s'"):format(tostring(type(t[1]))))
                 CreateThread(t[1], unpack(t[2]))
             else
                 CreateThread(t, ...)
             end
         end
     else
-        for i, v in pairs(obj) do
-            CreateThread(v, ...)
-        end
+        for _, v in pairs(obj) do CreateThread(v, ...) end
     end
 end
 
 -- =========================================================================
--- !!! MUST be defined BEFORE local Draw = {} !!!
--- These are referenced from inside Draw:Toggle / Draw:Slider / Draw:CoolBox /
--- Draw:Combobox / Draw:Keybind / etc. If they are declared after Draw, you
--- get "attempt to call a nil value" at the first element creation.
+-- Constants used by Draw.* (must exist before local Draw = {})
 -- =========================================================================
 local textBoxLetters = {
     "A","B","C","D","E","F","G","H","I","J","K","L","M",
@@ -80,8 +72,7 @@ local function KeyEnumToName(key)
     if key == nil then return "None" end
     local _key = tostring(key).."."
     _key = _key:gsub("%.", ",")
-    local keyname = nil
-    local looptime = 0
+    local keyname, looptime = nil, 0
     for w in _key:gmatch("(.-),") do
         looptime += 1
         if looptime == 3 then keyname = w end
@@ -99,13 +90,10 @@ local function KeyModifierToName(key, filename)
         else
             return keymodifiernames[key]
         end
-    else
-        return ""
     end
+    return ""
 end
-local function string_cut(s1, num)
-    return num == 0 and s1 or string.sub(s1, 1, num)
-end
+local function string_cut(s1, num) return num == 0 and s1 or string.sub(s1, 1, num) end
 local function Lerp(delta, from, to)
     if delta > 1 then return to end
     if delta < 0 then return from end
@@ -128,42 +116,43 @@ local function ColorRange(value, ranges)
 end
 
 -- =========================================================================
+-- Mouse helper (real cursor, Drawing-compatible coords)
+-- =========================================================================
+local UIS = game:GetService("UserInputService")
+local mouseX, mouseY = 0, 0
+local function RefreshMouse()
+    local p = UIS:GetMouseLocation()
+    mouseX, mouseY = p.X, p.Y
+end
+RefreshMouse()
+
+-- =========================================================================
 -- Event system
 -- =========================================================================
-local event = {}
-local allevent = {}
+local event, allevent = {}, {}
 function event.new(eventname, eventtable, requirename)
     if eventname then
-        assert(allevent[eventname] == nil,
-            ("the event '%s' already exists"):format(eventname))
+        assert(allevent[eventname] == nil, ("the event '%s' already exists"):format(eventname))
     end
     local newevent = eventtable or {}
-    local funcs = {}
-    local disconnectlist = {}
+    local funcs, disconnectlist = {}, {}
     function newevent:fire(...) allevent[eventname].fire(...) end
     function newevent:connect(func)
         funcs[#funcs + 1] = func
         local disconnected = false
-        local function disconnect()
-            if not disconnected then
-                disconnected = true
-                disconnectlist[func] = true
-            end
+        return function()
+            if not disconnected then disconnected = true; disconnectlist[func] = true end
         end
-        return disconnect
     end
     local function fire(...)
-        local n = #funcs
-        local j = 0
+        local n, j = #funcs, 0
         for i = 1, n do
-            local func = funcs[i]
-            if disconnectlist[func] then disconnectlist[func] = nil
-            else j = j + 1; funcs[j] = func end
+            local f = funcs[i]
+            if disconnectlist[f] then disconnectlist[f] = nil
+            else j = j + 1; funcs[j] = f end
         end
         for i = j + 1, n do funcs[i] = nil end
-        for i = 1, j do
-            CreateThread(function(...) pcall(funcs[i], ...) end, ...)
-        end
+        for i = 1, j do CreateThread(function(...) pcall(funcs[i], ...) end, ...) end
     end
     if eventname then allevent[eventname] = { event = newevent, fire = fire } end
     return newevent, fire
@@ -179,28 +168,18 @@ local function GetEvent(eventname) return allevent[eventname] end
 do
     local notes = {}
     local function DrawingObject(t, col)
-        local d = Drawing.new(t)
-        d.Visible = true
-        d.Transparency = 1
-        d.Color = col
-        return d
+        local d = Drawing.new(t); d.Visible = true; d.Transparency = 1; d.Color = col; return d
     end
-    local function Rectangle(sizex, sizey, fill, col)
+    local function Rectangle(sx, sy, fill, col)
         local s = DrawingObject("Square", col)
-        s.Filled = fill
-        s.Thickness = 1
-        s.Position = Vector2.new()
-        s.Size = Vector2.new(sizex, sizey)
+        s.Filled = fill; s.Thickness = 1
+        s.Position = Vector2.new(); s.Size = Vector2.new(sx, sy)
         return s
     end
     local function Text(text)
         local s = DrawingObject("Text", Color3.new(1, 1, 1))
-        s.Text = text
-        s.Size = 13
-        s.Center = false
-        s.Outline = true
-        s.Position = Vector2.new()
-        s.Font = 2
+        s.Text = text; s.Size = 13; s.Center = false; s.Outline = true
+        s.Position = Vector2.new(); s.Font = 2
         return s
     end
     function CreateNotification(t, customcolor)
@@ -216,9 +195,7 @@ do
             },
             Remove = function(self, d)
                 if d.Position.x < d.Size.x then
-                    for k, drawing in pairs(self.drawings) do
-                        drawing:Remove(); drawing = false
-                    end
+                    for _, dr in pairs(self.drawings) do dr:Remove(); dr = false end
                     self.enabled = false
                 end
             end,
@@ -228,9 +205,7 @@ do
                 if insety < indexOffset then insety -= (insety - indexOffset) * 0.2
                 else insety = indexOffset end
                 local size = self.size
-                local tpos = Vector2.new(
-                    pos.x - size.x / time - map(alpha, 0, 255, size.x, 0),
-                    pos.y + insety)
+                local tpos = Vector2.new(pos.x - size.x / time - map(alpha, 0, 255, size.x, 0), pos.y + insety)
                 self.pos = tpos
                 local locRect = {
                     x = math.ceil(tpos.x), y = math.ceil(tpos.y),
@@ -261,7 +236,7 @@ do
                             if menu then
                                 local mencol = customcolor or Color3.fromRGB(127, 72, 163)
                                 local color = linenum == 1 and mencol
-                                    or Color3.fromRGB(mencol.R * 255 - 40, mencol.G * 255 - 40, mencol.B * 255 - 40)
+                                    or Color3.fromRGB(mencol.R*255-40, mencol.G*255-40, mencol.B*255-40)
                                 if drawing.Color ~= color then drawing.Color = color end
                             end
                             linenum += 1
@@ -285,13 +260,12 @@ do
             local c = 0.28 - i / 80
             Note.drawings[i] = Rectangle(200, 1, true, Color3.new(c, c, c))
         end
-        local color = Color3.fromRGB(127, 72, 163)
         Note.drawings.text = Text(t)
         if Note.drawings.text.TextBounds.x + 7 > Note.size.x then
             Note.size = Vector2.new(Note.drawings.text.TextBounds.x + 7, Note.size.y)
         end
-        Note.drawings.line  = Rectangle(1, Note.size.y - 2, true, color)
-        Note.drawings.line1 = Rectangle(1, Note.size.y - 2, true, color)
+        Note.drawings.line  = Rectangle(1, Note.size.y - 2, true, Color3.fromRGB(127, 72, 163))
+        Note.drawings.line1 = Rectangle(1, Note.size.y - 2, true, Color3.fromRGB(127, 72, 163))
         notes[#notes + 1] = Note
     end
     game:GetService("RunService").RenderStepped:Connect(function(dt)
@@ -300,11 +274,9 @@ do
         end
         local length = #notes
         for k = 1, #notes do
-            local note = notes[k]
-            note:Update(k, length, dt)
-            if k <= math.ceil(length / 10) or note.fading then
-                note:Fade(k, length, dt)
-            end
+            local n = notes[k]
+            n:Update(k, length, dt)
+            if k <= math.ceil(length / 10) or n.fading then n:Fade(k, length, dt) end
         end
     end)
 end
@@ -321,8 +293,7 @@ local menu = {
         right = (menuWidth - 20) / 2 + 13,
     },
     activetab = 1, open = true, fadestart = 0, fading = false,
-    mousedown = false,
-    postable = {}, options = {},
+    mousedown = false, postable = {}, options = {},
     clrs = { norm = {}, dark = {}, togz = {} },
     mc = { 127, 72, 163 },
     watermark = {}, connections = {}, list = {},
@@ -338,10 +309,11 @@ local menu = {
     end,
     keybinds = {}, values = {},
     title = "UI Library",
+    ready = false,
 }
 
 -- =========================================================================
--- Drawing helpers  (RGB and Draw come AFTER the utility block above)
+-- Draw helpers
 -- =========================================================================
 local allrender = {}
 local RGB = Color3.fromRGB
@@ -349,258 +321,255 @@ local Draw = {}
 
 do
     function Draw:UnRender()
-        for k, v in pairs(allrender) do
-            for k1, v1 in pairs(v) do
-                if v1 and type(v1) ~= "number" and v1.__OBJECT_EXISTS then
-                    v1:Remove()
-                end
+        for _, v in pairs(allrender) do
+            for _, v1 in pairs(v) do
+                if v1 and type(v1) ~= "number" and v1.__OBJECT_EXISTS then v1:Remove() end
             end
         end
     end
-    function Draw:OutlinedRect(visible, x, y, w, h, clr, tablename)
-        local t = Drawing.new("Square")
-        t.Visible = visible; t.Position = Vector2.new(x, y); t.Size = Vector2.new(w, h)
-        t.Color = RGB(clr[1], clr[2], clr[3]); t.Filled = false; t.Thickness = 0
-        t.Transparency = clr[4] / 255
-        table.insert(tablename, t)
-        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+    function Draw:OutlinedRect(visible, x, y, w, h, clr, t)
+        local s = Drawing.new("Square")
+        s.Visible = visible; s.Position = Vector2.new(x, y); s.Size = Vector2.new(w, h)
+        s.Color = RGB(clr[1], clr[2], clr[3]); s.Filled = false; s.Thickness = 0
+        s.Transparency = clr[4] / 255
+        table.insert(t, s)
+        if not table.find(allrender, t) then table.insert(allrender, t) end
     end
-    function Draw:FilledRect(visible, x, y, w, h, clr, tablename)
-        local t = Drawing.new("Square")
-        t.Visible = visible; t.Position = Vector2.new(x, y); t.Size = Vector2.new(w, h)
-        t.Color = RGB(clr[1], clr[2], clr[3]); t.Filled = true; t.Thickness = 0
-        t.Transparency = clr[4] / 255
-        table.insert(tablename, t)
-        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+    function Draw:FilledRect(visible, x, y, w, h, clr, t)
+        local s = Drawing.new("Square")
+        s.Visible = visible; s.Position = Vector2.new(x, y); s.Size = Vector2.new(w, h)
+        s.Color = RGB(clr[1], clr[2], clr[3]); s.Filled = true; s.Thickness = 0
+        s.Transparency = clr[4] / 255
+        table.insert(t, s)
+        if not table.find(allrender, t) then table.insert(allrender, t) end
     end
-    function Draw:Line(visible, thickness, sx, sy, ex, ey, clr, tablename)
-        local t = Drawing.new("Line")
-        t.Visible = visible; t.Thickness = thickness
-        t.From = Vector2.new(sx, sy); t.To = Vector2.new(ex, ey)
-        t.Color = RGB(clr[1], clr[2], clr[3]); t.Transparency = clr[4] / 255
-        table.insert(tablename, t)
-        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+    function Draw:Line(visible, thickness, sx, sy, ex, ey, clr, t)
+        local s = Drawing.new("Line")
+        s.Visible = visible; s.Thickness = thickness
+        s.From = Vector2.new(sx, sy); s.To = Vector2.new(ex, ey)
+        s.Color = RGB(clr[1], clr[2], clr[3]); s.Transparency = clr[4] / 255
+        table.insert(t, s)
+        if not table.find(allrender, t) then table.insert(allrender, t) end
     end
-    function Draw:Image(visible, data, x, y, w, h, transparency, tablename)
-        local t = Drawing.new("Image")
-        t.Visible = visible; t.Position = Vector2.new(x, y); t.Size = Vector2.new(w, h)
-        t.Transparency = transparency; t.Data = data
-        table.insert(tablename, t)
-        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+    function Draw:Image(visible, data, x, y, w, h, transparency, t)
+        local s = Drawing.new("Image")
+        s.Visible = visible; s.Position = Vector2.new(x, y); s.Size = Vector2.new(w, h)
+        s.Transparency = transparency; s.Data = data
+        table.insert(t, s)
+        if not table.find(allrender, t) then table.insert(allrender, t) end
     end
-    function Draw:Text(text, font, visible, x, y, size, centered, clr, tablename)
-        local t = Drawing.new("Text")
-        t.Text = text; t.Visible = visible; t.Position = Vector2.new(x, y)
-        t.Size = size; t.Center = centered
-        t.Color = RGB(clr[1], clr[2], clr[3]); t.Transparency = clr[4] / 255
-        t.Outline = false; t.Font = font
-        table.insert(tablename, t)
-        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+    function Draw:Text(text, font, visible, x, y, size, centered, clr, t)
+        local s = Drawing.new("Text")
+        s.Text = text; s.Visible = visible; s.Position = Vector2.new(x, y)
+        s.Size = size; s.Center = centered
+        s.Color = RGB(clr[1], clr[2], clr[3]); s.Transparency = clr[4] / 255
+        s.Outline = false; s.Font = font
+        table.insert(t, s)
+        if not table.find(allrender, t) then table.insert(allrender, t) end
     end
-    function Draw:OutlinedText(text, font, visible, x, y, size, centered, clr, clr2, tablename)
-        local t = Drawing.new("Text")
-        t.Text = text; t.Visible = visible; t.Position = Vector2.new(x, y)
-        t.Size = size; t.Center = centered
-        t.Color = RGB(clr[1], clr[2], clr[3]); t.Transparency = clr[4] / 255
-        t.Outline = true; t.OutlineColor = RGB(clr2[1], clr2[2], clr2[3]); t.Font = font
-        if tablename then table.insert(tablename, t) end
-        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
-        return t
+    function Draw:OutlinedText(text, font, visible, x, y, size, centered, clr, clr2, t)
+        local s = Drawing.new("Text")
+        s.Text = text; s.Visible = visible; s.Position = Vector2.new(x, y)
+        s.Size = size; s.Center = centered
+        s.Color = RGB(clr[1], clr[2], clr[3]); s.Transparency = clr[4] / 255
+        s.Outline = true; s.OutlineColor = RGB(clr2[1], clr2[2], clr2[3]); s.Font = font
+        if t then table.insert(t, s) end
+        if not table.find(allrender, t) then table.insert(allrender, t) end
+        return s
     end
-    function Draw:Triangle(visible, filled, pa, pb, pc, clr, tablename)
+    function Draw:Triangle(visible, filled, pa, pb, pc, clr, t)
         clr = clr or {255,255,255,1}
-        local t = Drawing.new("Triangle")
-        t.Visible = visible; t.Transparency = clr[4] or 1
-        t.Color = RGB(clr[1], clr[2], clr[3]); t.Thickness = 4.1
+        local s = Drawing.new("Triangle")
+        s.Visible = visible; s.Transparency = clr[4] or 1
+        s.Color = RGB(clr[1], clr[2], clr[3]); s.Thickness = 4.1
         if pa and pb and pc then
-            t.PointA = Vector2.new(pa[1], pa[2])
-            t.PointB = Vector2.new(pb[1], pb[2])
-            t.PointC = Vector2.new(pc[1], pc[2])
+            s.PointA = Vector2.new(pa[1], pa[2])
+            s.PointB = Vector2.new(pb[1], pb[2])
+            s.PointC = Vector2.new(pc[1], pc[2])
         end
-        t.Filled = filled
-        table.insert(tablename, t)
-        if tablename and not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+        s.Filled = filled
+        table.insert(t, s)
+        if t and not table.find(allrender, t) then table.insert(allrender, t) end
     end
-    function Draw:Circle(visible, x, y, size, thickness, sides, clr, tablename)
-        local t = Drawing.new("Circle")
-        t.Position = Vector2.new(x, y); t.Visible = visible
-        t.Radius = size; t.Thickness = thickness; t.NumSides = sides
-        t.Transparency = clr[4]; t.Filled = false
-        t.Color = RGB(clr[1], clr[2], clr[3])
-        table.insert(tablename, t)
-        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+    function Draw:Circle(visible, x, y, size, thickness, sides, clr, t)
+        local s = Drawing.new("Circle")
+        s.Position = Vector2.new(x, y); s.Visible = visible
+        s.Radius = size; s.Thickness = thickness; s.NumSides = sides
+        s.Transparency = clr[4]; s.Filled = false
+        s.Color = RGB(clr[1], clr[2], clr[3])
+        table.insert(t, s)
+        if not table.find(allrender, t) then table.insert(allrender, t) end
     end
-    function Draw:FilledCircle(visible, x, y, size, thickness, sides, clr, tablename)
-        local t = Drawing.new("Circle")
-        t.Position = Vector2.new(x, y); t.Visible = visible
-        t.Radius = size; t.Thickness = thickness; t.NumSides = sides
-        t.Transparency = clr[4]; t.Filled = true
-        t.Color = RGB(clr[1], clr[2], clr[3])
-        table.insert(tablename, t)
-        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+    function Draw:FilledCircle(visible, x, y, size, thickness, sides, clr, t)
+        local s = Drawing.new("Circle")
+        s.Position = Vector2.new(x, y); s.Visible = visible
+        s.Radius = size; s.Thickness = thickness; s.NumSides = sides
+        s.Transparency = clr[4]; s.Filled = true
+        s.Color = RGB(clr[1], clr[2], clr[3])
+        table.insert(t, s)
+        if not table.find(allrender, t) then table.insert(allrender, t) end
     end
 
-    function Draw:MenuOutlinedRect(visible, x, y, w, h, clr, tablename)
-        Draw:OutlinedRect(visible, x + menu.x, y + menu.y, w, h, clr, tablename)
-        table.insert(menu.postable, { tablename[#tablename], x, y })
+    function Draw:MenuOutlinedRect(visible, x, y, w, h, clr, t)
+        Draw:OutlinedRect(visible, x + menu.x, y + menu.y, w, h, clr, t)
+        table.insert(menu.postable, { t[#t], x, y })
         if menu.log_multi ~= nil then
-            table.insert(menu.mgrouptabz[menu.log_multi[1]][menu.log_multi[2]], tablename[#tablename])
+            table.insert(menu.mgrouptabz[menu.log_multi[1]][menu.log_multi[2]], t[#t])
         end
     end
-    function Draw:MenuFilledRect(visible, x, y, w, h, clr, tablename)
-        Draw:FilledRect(visible, x + menu.x, y + menu.y, w, h, clr, tablename)
-        table.insert(menu.postable, { tablename[#tablename], x, y })
+    function Draw:MenuFilledRect(visible, x, y, w, h, clr, t)
+        Draw:FilledRect(visible, x + menu.x, y + menu.y, w, h, clr, t)
+        table.insert(menu.postable, { t[#t], x, y })
         if menu.log_multi ~= nil then
-            table.insert(menu.mgrouptabz[menu.log_multi[1]][menu.log_multi[2]], tablename[#tablename])
+            table.insert(menu.mgrouptabz[menu.log_multi[1]][menu.log_multi[2]], t[#t])
         end
     end
-    function Draw:MenuImage(visible, data, x, y, w, h, transparency, tablename)
-        Draw:Image(visible, data, x + menu.x, y + menu.y, w, h, transparency, tablename)
-        table.insert(menu.postable, { tablename[#tablename], x, y })
+    function Draw:MenuImage(visible, data, x, y, w, h, transparency, t)
+        Draw:Image(visible, data, x + menu.x, y + menu.y, w, h, transparency, t)
+        table.insert(menu.postable, { t[#t], x, y })
         if menu.log_multi ~= nil then
-            table.insert(menu.mgrouptabz[menu.log_multi[1]][menu.log_multi[2]], tablename[#tablename])
+            table.insert(menu.mgrouptabz[menu.log_multi[1]][menu.log_multi[2]], t[#t])
         end
     end
-    function Draw:MenuBigText(text, visible, centered, x, y, tablename)
-        local t = Draw:OutlinedText(text, 2, visible, x + menu.x, y + menu.y, 13, centered,
-            {255,255,255,255}, {0,0,0}, tablename)
-        table.insert(menu.postable, { tablename[#tablename], x, y })
+    function Draw:MenuBigText(text, visible, centered, x, y, t)
+        local s = Draw:OutlinedText(text, 2, visible, x + menu.x, y + menu.y, 13, centered,
+            {255,255,255,255}, {0,0,0}, t)
+        table.insert(menu.postable, { t[#t], x, y })
         if menu.log_multi ~= nil then
-            table.insert(menu.mgrouptabz[menu.log_multi[1]][menu.log_multi[2]], tablename[#tablename])
+            table.insert(menu.mgrouptabz[menu.log_multi[1]][menu.log_multi[2]], t[#t])
         end
-        return t
+        return s
     end
 
-    function Draw:CoolBox(name, x, y, w, h, tab)
-        Draw:MenuOutlinedRect(true, x, y, w, h, {0,0,0,255}, tab)
-        Draw:MenuOutlinedRect(true, x+1, y+1, w-2, h-2, {20,20,20,255}, tab)
-        Draw:MenuOutlinedRect(true, x+2, y+2, w-3, 1, {127,72,163,255}, tab)
-        table.insert(menu.clrs.norm, tab[#tab])
-        Draw:MenuOutlinedRect(true, x+2, y+3, w-3, 1, {87,32,123,255}, tab)
-        table.insert(menu.clrs.dark, tab[#tab])
-        Draw:MenuOutlinedRect(true, x+2, y+4, w-3, 1, {20,20,20,255}, tab)
+    function Draw:CoolBox(name, x, y, w, h, t)
+        Draw:MenuOutlinedRect(true, x, y, w, h, {0,0,0,255}, t)
+        Draw:MenuOutlinedRect(true, x+1, y+1, w-2, h-2, {20,20,20,255}, t)
+        Draw:MenuOutlinedRect(true, x+2, y+2, w-3, 1, {127,72,163,255}, t)
+        table.insert(menu.clrs.norm, t[#t])
+        Draw:MenuOutlinedRect(true, x+2, y+3, w-3, 1, {87,32,123,255}, t)
+        table.insert(menu.clrs.dark, t[#t])
+        Draw:MenuOutlinedRect(true, x+2, y+4, w-3, 1, {20,20,20,255}, t)
         for i = 0, 7 do
-            Draw:MenuFilledRect(true, x+2, y+5+(i*2), w-4, 2, {45,45,45,255}, tab)
-            tab[#tab].Color = ColorRange(i, {
+            Draw:MenuFilledRect(true, x+2, y+5+(i*2), w-4, 2, {45,45,45,255}, t)
+            t[#t].Color = ColorRange(i, {
                 [1] = {start=0, color=RGB(45,45,45)},
                 [2] = {start=7, color=RGB(35,35,35)},
             })
         end
-        Draw:MenuBigText(name, true, false, x+6, y+5, tab)
+        Draw:MenuBigText(name, true, false, x+6, y+5, t)
     end
 
-    function Draw:CoolMultiBox(names, x, y, w, h, tab)
-        Draw:MenuOutlinedRect(true, x, y, w, h, {0,0,0,255}, tab)
-        Draw:MenuOutlinedRect(true, x+1, y+1, w-2, h-2, {20,20,20,255}, tab)
-        Draw:MenuOutlinedRect(true, x+2, y+2, w-3, 1, {127,72,163,255}, tab)
-        table.insert(menu.clrs.norm, tab[#tab])
-        Draw:MenuOutlinedRect(true, x+2, y+3, w-3, 1, {87,32,123,255}, tab)
-        table.insert(menu.clrs.dark, tab[#tab])
-        Draw:MenuOutlinedRect(true, x+2, y+4, w-3, 1, {20,20,20,255}, tab)
-        Draw:MenuFilledRect(true, x+2, y+5, w-4, 18, {30,30,30,255}, tab)
-        Draw:MenuFilledRect(true, x+2, y+21, w-4, 2, {20,20,20,255}, tab)
+    function Draw:CoolMultiBox(names, x, y, w, h, t)
+        Draw:MenuOutlinedRect(true, x, y, w, h, {0,0,0,255}, t)
+        Draw:MenuOutlinedRect(true, x+1, y+1, w-2, h-2, {20,20,20,255}, t)
+        Draw:MenuOutlinedRect(true, x+2, y+2, w-3, 1, {127,72,163,255}, t)
+        table.insert(menu.clrs.norm, t[#t])
+        Draw:MenuOutlinedRect(true, x+2, y+3, w-3, 1, {87,32,123,255}, t)
+        table.insert(menu.clrs.dark, t[#t])
+        Draw:MenuOutlinedRect(true, x+2, y+4, w-3, 1, {20,20,20,255}, t)
+        Draw:MenuFilledRect(true, x+2, y+5, w-4, 18, {30,30,30,255}, t)
+        Draw:MenuFilledRect(true, x+2, y+21, w-4, 2, {20,20,20,255}, t)
         local selected = {}
         for i = 0, 8 do
-            Draw:MenuFilledRect(true, x+2, y+5+(i*2), w-159, 2, {45,45,45,255}, tab)
-            tab[#tab].Color = ColorRange(i, {
+            Draw:MenuFilledRect(true, x+2, y+5+(i*2), w-159, 2, {45,45,45,255}, t)
+            t[#t].Color = ColorRange(i, {
                 [1] = {start=0, color=RGB(50,50,50)},
                 [2] = {start=8, color=RGB(35,35,35)},
             })
-            table.insert(selected, { postable = #menu.postable, drawn = tab[#tab] })
+            table.insert(selected, { postable = #menu.postable, drawn = t[#t] })
         end
         local length = 2
         local selected_pos, click_pos, nametext = {}, {}, {}
         for i, v in ipairs(names) do
-            Draw:MenuBigText(v, true, false, x+4+length, y+5, tab)
-            if i == 1 then tab[#tab].Color = RGB(255,255,255)
-            else tab[#tab].Color = RGB(170,170,170) end
-            table.insert(nametext, tab[#tab])
-            Draw:MenuFilledRect(true, x+length+tab[#tab].TextBounds.X+8, y+5, 2, 16, {20,20,20,255}, tab)
-            table.insert(selected_pos, { pos = x+length, length = tab[#tab-1].TextBounds.X+8 })
+            Draw:MenuBigText(v, true, false, x+4+length, y+5, t)
+            t[#t].Color = (i == 1) and RGB(255,255,255) or RGB(170,170,170)
+            table.insert(nametext, t[#t])
+            Draw:MenuFilledRect(true, x+length+t[#t].TextBounds.X+8, y+5, 2, 16, {20,20,20,255}, t)
+            table.insert(selected_pos, { pos = x+length, length = t[#t-1].TextBounds.X+8 })
             table.insert(click_pos, {
                 x = x+length, y = y+5,
-                width = tab[#tab-1].TextBounds.X+8,
+                width = t[#t-1].TextBounds.X+8,
                 height = 18, name = v, num = i,
             })
-            length += tab[#tab-1].TextBounds.X+10
+            length += t[#t-1].TextBounds.X+10
         end
-        for k, v in pairs(selected) do
+        for _, v in pairs(selected) do
             menu.postable[v.postable][2] = selected_pos[1].pos
             v.drawn.Size = Vector2.new(selected_pos[1].length, 2)
         end
         return { bar = selected, barpos = selected_pos, click_pos = click_pos, nametext = nametext }
     end
 
-    function Draw:Toggle(name, value, unsafe, x, y, tab)
-        Draw:MenuOutlinedRect(true, x, y, 12, 12, {30,30,30,255}, tab)
-        Draw:MenuOutlinedRect(true, x+1, y+1, 10, 10, {0,0,0,255}, tab)
-        local temptable = {}
+    function Draw:Toggle(name, value, unsafe, x, y, t)
+        Draw:MenuOutlinedRect(true, x, y, 12, 12, {30,30,30,255}, t)
+        Draw:MenuOutlinedRect(true, x+1, y+1, 10, 10, {0,0,0,255}, t)
+        local tbl = {}
         for i = 0, 3 do
-            Draw:MenuFilledRect(true, x+2, y+2+(i*2), 8, 2, {0,0,0,255}, tab)
-            table.insert(temptable, tab[#tab])
+            Draw:MenuFilledRect(true, x+2, y+2+(i*2), 8, 2, {0,0,0,255}, t)
+            table.insert(tbl, t[#t])
             if value then
-                tab[#tab].Color = ColorRange(i, {
+                t[#t].Color = ColorRange(i, {
                     [1] = {start=0, color=RGB(menu.mc[1], menu.mc[2], menu.mc[3])},
                     [2] = {start=3, color=RGB(menu.mc[1]-40, menu.mc[2]-40, menu.mc[3]-40)},
                 })
             else
-                tab[#tab].Color = ColorRange(i, {
+                t[#t].Color = ColorRange(i, {
                     [1] = {start=0, color=RGB(50,50,50)},
                     [2] = {start=3, color=RGB(30,30,30)},
                 })
             end
         end
-        Draw:MenuBigText(name, true, false, x+16, y-1, tab)
-        if unsafe == true then tab[#tab].Color = RGB(90,90,90) end
-        table.insert(temptable, tab[#tab])
-        return temptable
+        Draw:MenuBigText(name, true, false, x+16, y-1, t)
+        if unsafe == true then t[#t].Color = RGB(90,90,90) end
+        table.insert(tbl, t[#t])
+        return tbl
     end
 
-    function Draw:Keybind(key, x, y, tab)
-        local temptable = {}
-        Draw:MenuFilledRect(true, x, y, 44, 16, {25,25,25,255}, tab)
-        Draw:MenuBigText(KeyEnumToName(key), true, true, x+22, y+1, tab)
-        table.insert(temptable, tab[#tab])
-        Draw:MenuOutlinedRect(true, x, y, 44, 16, {30,30,30,255}, tab)
-        table.insert(temptable, tab[#tab])
-        Draw:MenuOutlinedRect(true, x+1, y+1, 42, 14, {0,0,0,255}, tab)
-        return temptable
+    function Draw:Keybind(key, x, y, t)
+        local tbl = {}
+        Draw:MenuFilledRect(true, x, y, 44, 16, {25,25,25,255}, t)
+        Draw:MenuBigText(KeyEnumToName(key), true, true, x+22, y+1, t)
+        table.insert(tbl, t[#t])
+        Draw:MenuOutlinedRect(true, x, y, 44, 16, {30,30,30,255}, t)
+        table.insert(tbl, t[#t])
+        Draw:MenuOutlinedRect(true, x+1, y+1, 42, 14, {0,0,0,255}, t)
+        return tbl
     end
 
-    function Draw:ColorPicker(color, x, y, tab)
-        local temptable = {}
-        Draw:MenuOutlinedRect(true, x, y, 28, 14, {30,30,30,255}, tab)
-        Draw:MenuOutlinedRect(true, x+1, y+1, 26, 12, {0,0,0,255}, tab)
-        Draw:MenuFilledRect(true, x+2, y+2, 24, 10, {color[1], color[2], color[3], 255}, tab)
-        table.insert(temptable, tab[#tab])
-        Draw:MenuOutlinedRect(true, x+2, y+2, 24, 10, {color[1]-40, color[2]-40, color[3]-40, 255}, tab)
-        table.insert(temptable, tab[#tab])
-        Draw:MenuOutlinedRect(true, x+3, y+3, 22, 8, {color[1]-40, color[2]-40, color[3]-40, 255}, tab)
-        table.insert(temptable, tab[#tab])
-        return temptable
+    function Draw:ColorPicker(color, x, y, t)
+        local tbl = {}
+        Draw:MenuOutlinedRect(true, x, y, 28, 14, {30,30,30,255}, t)
+        Draw:MenuOutlinedRect(true, x+1, y+1, 26, 12, {0,0,0,255}, t)
+        Draw:MenuFilledRect(true, x+2, y+2, 24, 10, {color[1], color[2], color[3], 255}, t)
+        table.insert(tbl, t[#t])
+        Draw:MenuOutlinedRect(true, x+2, y+2, 24, 10, {color[1]-40, color[2]-40, color[3]-40, 255}, t)
+        table.insert(tbl, t[#t])
+        Draw:MenuOutlinedRect(true, x+3, y+3, 22, 8, {color[1]-40, color[2]-40, color[3]-40, 255}, t)
+        table.insert(tbl, t[#t])
+        return tbl
     end
 
-    function Draw:Slider(name, stradd, value, minvalue, maxvalue, customvals, rounded, x, y, length, tab)
-        Draw:MenuBigText(name, true, false, x, y-3, tab)
+    function Draw:Slider(name, stradd, value, minvalue, maxvalue, customvals, rounded, x, y, length, t)
+        Draw:MenuBigText(name, true, false, x, y-3, t)
         for i = 0, 3 do
-            Draw:MenuFilledRect(true, x+2, y+14+(i*2), length-4, 2, {0,0,0,255}, tab)
-            tab[#tab].Color = ColorRange(i, {
+            Draw:MenuFilledRect(true, x+2, y+14+(i*2), length-4, 2, {0,0,0,255}, t)
+            t[#t].Color = ColorRange(i, {
                 [1] = {start=0, color=RGB(50,50,50)},
                 [2] = {start=3, color=RGB(30,30,30)},
             })
         end
-        local temptable = {}
+        local tbl = {}
         for i = 0, 3 do
             Draw:MenuFilledRect(true, x+2, y+14+(i*2),
-                (length-4) * ((value-minvalue)/(maxvalue-minvalue)), 2, {0,0,0,255}, tab)
-            table.insert(temptable, tab[#tab])
-            tab[#tab].Color = ColorRange(i, {
+                (length-4) * ((value-minvalue)/(maxvalue-minvalue)), 2, {0,0,0,255}, t)
+            table.insert(tbl, t[#t])
+            t[#t].Color = ColorRange(i, {
                 [1] = {start=0, color=RGB(menu.mc[1], menu.mc[2], menu.mc[3])},
                 [2] = {start=3, color=RGB(menu.mc[1]-40, menu.mc[2]-40, menu.mc[3]-40)},
             })
         end
-        Draw:MenuOutlinedRect(true, x, y+12, length, 12, {30,30,30,255}, tab)
-        Draw:MenuOutlinedRect(true, x+1, y+13, length-2, 10, {0,0,0,255}, tab)
+        Draw:MenuOutlinedRect(true, x, y+12, length, 12, {30,30,30,255}, t)
+        Draw:MenuOutlinedRect(true, x+1, y+13, length-2, 10, {0,0,0,255}, t)
         local textstr = ""
         if stradd == nil then stradd = "" end
         local decplaces = rounded and string.rep("0", math.log(1/rounded)/math.log(10)) or 1
@@ -609,45 +578,45 @@ do
         else
             textstr = tostring(value)..stradd
         end
-        Draw:MenuBigText(customvals[value] or textstr, true, true, x+(length*0.5), y+11, tab)
-        table.insert(temptable, tab[#tab])
-        table.insert(temptable, stradd)
-        return temptable
+        Draw:MenuBigText(customvals[value] or textstr, true, true, x+(length*0.5), y+11, t)
+        table.insert(tbl, t[#t])
+        table.insert(tbl, stradd)
+        return tbl
     end
 
-    function Draw:Dropbox(name, value, values, x, y, length, tab)
-        local temptable = {}
-        Draw:MenuBigText(name, true, false, x, y-3, tab)
+    function Draw:Dropbox(name, value, values, x, y, length, t)
+        local tbl = {}
+        Draw:MenuBigText(name, true, false, x, y-3, t)
         for i = 0, 7 do
-            Draw:MenuFilledRect(true, x+2, y+14+(i*2), length-4, 2, {0,0,0,255}, tab)
-            tab[#tab].Color = ColorRange(i, {
+            Draw:MenuFilledRect(true, x+2, y+14+(i*2), length-4, 2, {0,0,0,255}, t)
+            t[#t].Color = ColorRange(i, {
                 [1] = {start=0, color=RGB(50,50,50)},
                 [2] = {start=7, color=RGB(35,35,35)},
             })
         end
-        Draw:MenuOutlinedRect(true, x, y+12, length, 22, {30,30,30,255}, tab)
-        Draw:MenuOutlinedRect(true, x+1, y+13, length-2, 20, {0,0,0,255}, tab)
-        Draw:MenuBigText(tostring(values[value]), true, false, x+6, y+16, tab)
-        table.insert(temptable, tab[#tab])
-        Draw:MenuBigText("-", true, false, x-17+length, y+16, tab)
-        table.insert(temptable, tab[#tab])
-        return temptable
+        Draw:MenuOutlinedRect(true, x, y+12, length, 22, {30,30,30,255}, t)
+        Draw:MenuOutlinedRect(true, x+1, y+13, length-2, 20, {0,0,0,255}, t)
+        Draw:MenuBigText(tostring(values[value]), true, false, x+6, y+16, t)
+        table.insert(tbl, t[#t])
+        Draw:MenuBigText("-", true, false, x-17+length, y+16, t)
+        table.insert(tbl, t[#t])
+        return tbl
     end
 
-    function Draw:Combobox(name, values, x, y, length, tab)
-        local temptable = {}
-        Draw:MenuBigText(name, true, false, x, y-3, tab)
+    function Draw:Combobox(name, values, x, y, length, t)
+        local tbl = {}
+        Draw:MenuBigText(name, true, false, x, y-3, t)
         for i = 0, 7 do
-            Draw:MenuFilledRect(true, x+2, y+14+(i*2), length-4, 2, {0,0,0,255}, tab)
-            tab[#tab].Color = ColorRange(i, {
+            Draw:MenuFilledRect(true, x+2, y+14+(i*2), length-4, 2, {0,0,0,255}, t)
+            t[#t].Color = ColorRange(i, {
                 [1] = {start=0, color=RGB(50,50,50)},
                 [2] = {start=7, color=RGB(35,35,35)},
             })
         end
-        Draw:MenuOutlinedRect(true, x, y+12, length, 22, {30,30,30,255}, tab)
-        Draw:MenuOutlinedRect(true, x+1, y+13, length-2, 20, {0,0,0,255}, tab)
+        Draw:MenuOutlinedRect(true, x, y+12, length, 22, {30,30,30,255}, t)
+        Draw:MenuOutlinedRect(true, x+1, y+13, length-2, 20, {0,0,0,255}, t)
         local textthing = ""
-        for k, v in pairs(values) do
+        for _, v in pairs(values) do
             if v[2] then
                 if textthing == "" then textthing = v[1]
                 else textthing ..= ", "..v[1] end
@@ -655,176 +624,159 @@ do
         end
         if string.len(textthing) > 25 then textthing = string_cut(textthing, 25) end
         textthing = textthing ~= "" and textthing or "None"
-        Draw:MenuBigText(textthing, true, false, x+6, y+16, tab)
-        table.insert(temptable, tab[#tab])
-        Draw:MenuBigText("...", true, false, x-27+length, y+16, tab)
-        table.insert(temptable, tab[#tab])
-        return temptable
+        Draw:MenuBigText(textthing, true, false, x+6, y+16, t)
+        table.insert(tbl, t[#t])
+        Draw:MenuBigText("...", true, false, x-27+length, y+16, t)
+        table.insert(tbl, t[#t])
+        return tbl
     end
 
-    function Draw:Button(name, x, y, length, tab)
-        local temptable = {}
+    function Draw:Button(name, x, y, length, t)
+        local tbl = {}
         for i = 0, 8 do
-            Draw:MenuFilledRect(true, x+2, y+2+(i*2), length-4, 2, {0,0,0,255}, tab)
-            tab[#tab].Color = ColorRange(i, {
+            Draw:MenuFilledRect(true, x+2, y+2+(i*2), length-4, 2, {0,0,0,255}, t)
+            t[#t].Color = ColorRange(i, {
                 [1] = {start=0, color=RGB(50,50,50)},
                 [2] = {start=8, color=RGB(35,35,35)},
             })
-            table.insert(temptable, tab[#tab])
+            table.insert(tbl, t[#t])
         end
-        Draw:MenuOutlinedRect(true, x, y, length, 22, {30,30,30,255}, tab)
-        Draw:MenuOutlinedRect(true, x+1, y+1, length-2, 20, {0,0,0,255}, tab)
-        temptable.text = Draw:MenuBigText(name, true, true, x+math.floor(length*0.5), y+4, tab)
-        return temptable
+        Draw:MenuOutlinedRect(true, x, y, length, 22, {30,30,30,255}, t)
+        Draw:MenuOutlinedRect(true, x+1, y+1, length-2, 20, {0,0,0,255}, t)
+        tbl.text = Draw:MenuBigText(name, true, true, x+math.floor(length*0.5), y+4, t)
+        return tbl
     end
 
-    function Draw:List(name, x, y, length, maxamount, columns, tab)
-        local temptable = { uparrow = {}, downarrow = {}, liststuff = { rows = {}, words = {} } }
+    function Draw:List(name, x, y, length, maxamount, columns, t)
+        local tbl = { uparrow = {}, downarrow = {}, liststuff = { rows = {}, words = {} } }
         for i, v in ipairs(name) do
             Draw:MenuBigText(v, true, false,
-                (math.floor(length/columns) * i) - math.floor(length/columns) + 30, y-3, tab)
+                (math.floor(length/columns) * i) - math.floor(length/columns) + 30, y-3, t)
         end
-        Draw:MenuOutlinedRect(true, x, y+12, length, 22*maxamount+4, {30,30,30,255}, tab)
-        Draw:MenuOutlinedRect(true, x+1, y+13, length-2, 22*maxamount+2, {0,0,0,255}, tab)
-        Draw:MenuFilledRect(true, x+length-7, y+16, 1, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.uparrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
-        Draw:MenuFilledRect(true, x+length-8, y+17, 3, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.uparrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
-        Draw:MenuFilledRect(true, x+length-9, y+18, 5, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.uparrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
-        Draw:MenuFilledRect(true, x+length-7, y+16+(22*maxamount+4)-9, 1, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.downarrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
-        Draw:MenuFilledRect(true, x+length-8, y+16+(22*maxamount+4)-10, 3, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.downarrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
-        Draw:MenuFilledRect(true, x+length-9, y+16+(22*maxamount+4)-11, 5, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tab)
-        table.insert(temptable.downarrow, tab[#tab]); table.insert(menu.clrs.norm, tab[#tab])
+        Draw:MenuOutlinedRect(true, x, y+12, length, 22*maxamount+4, {30,30,30,255}, t)
+        Draw:MenuOutlinedRect(true, x+1, y+13, length-2, 22*maxamount+2, {0,0,0,255}, t)
+        Draw:MenuFilledRect(true, x+length-7, y+16, 1, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, t)
+        table.insert(tbl.uparrow, t[#t]); table.insert(menu.clrs.norm, t[#t])
+        Draw:MenuFilledRect(true, x+length-8, y+17, 3, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, t)
+        table.insert(tbl.uparrow, t[#t]); table.insert(menu.clrs.norm, t[#t])
+        Draw:MenuFilledRect(true, x+length-9, y+18, 5, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, t)
+        table.insert(tbl.uparrow, t[#t]); table.insert(menu.clrs.norm, t[#t])
+        Draw:MenuFilledRect(true, x+length-7, y+16+(22*maxamount+4)-9, 1, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, t)
+        table.insert(tbl.downarrow, t[#t]); table.insert(menu.clrs.norm, t[#t])
+        Draw:MenuFilledRect(true, x+length-8, y+16+(22*maxamount+4)-10, 3, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, t)
+        table.insert(tbl.downarrow, t[#t]); table.insert(menu.clrs.norm, t[#t])
+        Draw:MenuFilledRect(true, x+length-9, y+16+(22*maxamount+4)-11, 5, 1, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, t)
+        table.insert(tbl.downarrow, t[#t]); table.insert(menu.clrs.norm, t[#t])
         for i = 1, maxamount do
-            temptable.liststuff.rows[i] = {}
+            tbl.liststuff.rows[i] = {}
             if i ~= maxamount then
-                Draw:MenuOutlinedRect(true, x+4, (y+13)+(22*i), length-8, 2, {20,20,20,255}, tab)
-                table.insert(temptable.liststuff.rows[i], tab[#tab])
+                Draw:MenuOutlinedRect(true, x+4, (y+13)+(22*i), length-8, 2, {20,20,20,255}, t)
+                table.insert(tbl.liststuff.rows[i], t[#t])
             end
             if columns ~= nil then
                 for i1 = 1, columns-1 do
                     Draw:MenuOutlinedRect(true, x+math.floor(length/columns)*i1,
-                        (y+13)+(22*i)-18, 2, 16, {20,20,20,255}, tab)
-                    table.insert(temptable.liststuff.rows[i], tab[#tab])
+                        (y+13)+(22*i)-18, 2, 16, {20,20,20,255}, t)
+                    table.insert(tbl.liststuff.rows[i], t[#t])
                 end
             end
-            temptable.liststuff.words[i] = {}
+            tbl.liststuff.words[i] = {}
             if columns ~= nil then
                 for i1 = 1, columns do
                     Draw:MenuBigText("", true, false,
                         (x+math.floor(length/columns)*i1) - math.floor(length/columns)+5,
-                        (y+13)+(22*i)-16, tab)
-                    table.insert(temptable.liststuff.words[i], tab[#tab])
+                        (y+13)+(22*i)-16, t)
+                    table.insert(tbl.liststuff.words[i], t[#t])
                 end
             else
-                Draw:MenuBigText("", true, false, x+5, (y+13)+(22*i)-16, tab)
-                table.insert(temptable.liststuff.words[i], tab[#tab])
+                Draw:MenuBigText("", true, false, x+5, (y+13)+(22*i)-16, t)
+                table.insert(tbl.liststuff.words[i], t[#t])
             end
         end
-        return temptable
+        return tbl
     end
 
-    function Draw:ImageWithText(size, image, text, x, y, tab)
-        local temptable = {}
-        Draw:MenuOutlinedRect(true, x, y, size+4, size+4, {30,30,30,255}, tab)
-        Draw:MenuOutlinedRect(true, x+1, y+1, size+2, size+2, {0,0,0,255}, tab)
-        Draw:MenuFilledRect(true, x+2, y+2, size, size, {40,40,40,255}, tab)
-        Draw:MenuBigText(text, true, false, x+size+8, y, tab)
-        table.insert(temptable, tab[#tab])
-        Draw:MenuImage(true, image, x+2, y+2, size, size, 1, tab)
-        table.insert(temptable, tab[#tab])
-        return temptable
+    function Draw:ImageWithText(size, image, text, x, y, t)
+        local tbl = {}
+        Draw:MenuOutlinedRect(true, x, y, size+4, size+4, {30,30,30,255}, t)
+        Draw:MenuOutlinedRect(true, x+1, y+1, size+2, size+2, {0,0,0,255}, t)
+        Draw:MenuFilledRect(true, x+2, y+2, size, size, {40,40,40,255}, t)
+        Draw:MenuBigText(text, true, false, x+size+8, y, t)
+        table.insert(tbl, t[#t])
+        Draw:MenuImage(true, image, x+2, y+2, size, size, 1, t)
+        table.insert(tbl, t[#t])
+        return tbl
     end
 
-    function Draw:TextBox(name, text, x, y, length, tab)
+    function Draw:TextBox(name, text, x, y, length, t)
         for i = 0, 8 do
-            Draw:MenuFilledRect(true, x+2, y+2+(i*2), length-4, 2, {0,0,0,255}, tab)
-            tab[#tab].Color = ColorRange(i, {
+            Draw:MenuFilledRect(true, x+2, y+2+(i*2), length-4, 2, {0,0,0,255}, t)
+            t[#t].Color = ColorRange(i, {
                 [1] = {start=0, color=RGB(50,50,50)},
                 [2] = {start=8, color=RGB(35,35,35)},
             })
         end
-        Draw:MenuOutlinedRect(true, x, y, length, 22, {30,30,30,255}, tab)
-        Draw:MenuOutlinedRect(true, x+1, y+1, length-2, 20, {0,0,0,255}, tab)
-        Draw:MenuBigText(text, true, false, x+6, y+4, tab)
-        return tab[#tab]
+        Draw:MenuOutlinedRect(true, x, y, length, 22, {30,30,30,255}, t)
+        Draw:MenuOutlinedRect(true, x+1, y+1, length-2, 20, {0,0,0,255}, t)
+        Draw:MenuBigText(text, true, false, x+6, y+4, t)
+        return t[#t]
     end
 end
 
+local loadingthing = Draw:OutlinedText("Loading...", 2, true,
+    math.floor(workspace.CurrentCamera.ViewportSize.x/16),
+    math.floor(workspace.CurrentCamera.ViewportSize.y/16),
+    13, true, {255,50,200,255}, {0,0,0})
+
 -- =========================================================================
--- Everything from here on down (starting at "-- Player / game services")
--- is IDENTICAL to my previous message. DO NOT move the utility block above
--- below this line — it must stay where it is, BEFORE `local Draw = {}`.
--- =========================================================================
--- =========================================================
 -- Player / game services
--- =========================================================
+-- =========================================================================
 local Players = game:GetService("Players")
-local stats   = game:GetService("Stats")
 local LOCAL_PLAYER = Players.LocalPlayer
-local LOCAL_MOUSE = LOCAL_PLAYER:GetMouse()
 local INPUT_SERVICE = game:GetService("UserInputService")
+local TEAMS = game:GetService("Teams")
+local GAME_SETTINGS = UserSettings():GetService("UserGameSettings")
 local Camera = workspace.CurrentCamera
 local SCREEN_SIZE = Camera.ViewportSize
+
+menu.x = math.floor((SCREEN_SIZE.x / 2) - (menu.w / 2))
+menu.y = math.floor((SCREEN_SIZE.y / 2) - (menu.h / 2))
+
 local ButtonPressed = event.new("bb_buttonpressed")
 local TogglePressed = event.new("bb_togglepressed")
 
-menu.x = math.floor((SCREEN_SIZE.x/2) - (menu.w/2))
-menu.y = math.floor((SCREEN_SIZE.y/2) - (menu.h/2))
+-- =========================================================================
+-- Config storage: DINGOSQUAD/Configs/*.DS
+-- =========================================================================
+local CONFIG_ROOT = "DINGOSQUAD"
+local CONFIG_DIR  = "DINGOSQUAD/Configs"
 
-local function DeepRestoreTableFunctions(tbl)
-    for k, v in next, tbl do
-        if type(v) == "function" and is_synapse_function and is_synapse_function(v) then
-            for k1, v1 in next, getupvalues(v) do
-                if type(v1) == "function" and islclosure(v1) and not is_synapse_function(v1) then
-                    tbl[k] = v1
-                end
-            end
-        end
-        if type(v) == "table" then DeepRestoreTableFunctions(v) end
-    end
-end
-
--- =========================================================
--- Configuration persistence
--- =========================================================
-if not isfolder("bitchbot") then
-    makefolder("bitchbot")
-    if not isfile("bitchbot/relations.bb") then
-        writefile("bitchbot/relations.bb", "bb:{{friends:}{priority:}")
-    end
-else
-    if not isfile("bitchbot/relations.bb") then
-        writefile("bitchbot/relations.bb", "bb:{{friends:}{priority:}")
-    end
-    writefile("bitchbot/debuglog.bb", "")
-end
+if not isfolder(CONFIG_ROOT) then makefolder(CONFIG_ROOT) end
+if not isfolder(CONFIG_DIR)  then makefolder(CONFIG_DIR)  end
 
 local configs = {}
+
 local function GetConfigs()
     local result = {}
-    local directory = "bitchbot\\"..menu.game
-    if not isfolder(directory) then makefolder(directory) end
-    for k, v in pairs(listfiles(directory)) do
-        local clipped = v:sub(#directory + 2)
-        if clipped:sub(#clipped - 2) == ".bb" then
-            clipped = clipped:sub(0, #clipped - 3)
-            result[k] = clipped
-            configs[k] = v
-        end
+    if not isfolder(CONFIG_DIR) then makefolder(CONFIG_DIR) end
+    for _, v in pairs(listfiles(CONFIG_DIR)) do
+        local name = tostring(v):match("([^/\\]+)%.DS$")
+        if name then table.insert(result, name) end
     end
-    if #result <= 0 then
-        writefile("bitchbot/"..menu.game.."/Default.bb", "")
+    if #result == 0 then
+        writefile(CONFIG_DIR .. "/Default.DS", "")
+        table.insert(result, "Default")
     end
     return result
 end
 
--- =========================================================
--- Menu.Initialize
--- =========================================================
+local function ConfigPath(name)
+    return CONFIG_DIR .. "/" .. tostring(name) .. ".DS"
+end
+
+-- =========================================================================
+-- menu.Initialize
+-- =========================================================================
 function menu.Initialize(menutable)
     local bbmenu = {}
     do
@@ -882,7 +834,7 @@ function menu.Initialize(menutable)
 
         local y_offies = { left = 66, right = 66 }
         if v.content ~= nil then
-            for k1, v1 in pairs(v.content) do
+            for _, v1 in pairs(v.content) do
                 if v1.autopos ~= nil then
                     v1.width = menu.columns.width
                     if v1.autopos == "left" then v1.x = menu.columns.left; v1.y = y_offies.left
@@ -899,20 +851,20 @@ function menu.Initialize(menutable)
                         menu.mgrouptabz[v.name][g_name] = {}
                         menu.log_multi = { v.name, g_name }
                     end
-                    local content = nil
+                    local content, base_y
                     if type(v1.name) == "table" then
-                        y_pos = 28
+                        base_y = 28
                         content = v1[g_ind].content
                     else
-                        y_pos = 24
+                        base_y = 24
                         content = v1.content
                     end
+                    y_pos = base_y
                     if content ~= nil then
-                        for k2, v2 in pairs(content) do
+                        for _, v2 in pairs(content) do
                             if v2.type == "toggle" then
                                 menu.options[v.name][g_name][v2.name] = {}
-                                local unsafe = false
-                                if v2.unsafe then unsafe = true end
+                                local unsafe = v2.unsafe and true or false
                                 menu.options[v.name][g_name][v2.name][4] =
                                     Draw:Toggle(v2.name, v2.value, unsafe, v1.x+8, v1.y+y_pos, tabz[k])
                                 menu.options[v.name][g_name][v2.name][1] = v2.value
@@ -922,9 +874,6 @@ function menu.Initialize(menutable)
                                 menu.options[v.name][g_name][v2.name][6] = unsafe
                                 menu.options[v.name][g_name][v2.name].tooltip = v2.tooltip or nil
                                 menu.options[v.name][g_name][v2.name].callback = v2.callback
-                                menu.options[v.name][g_name][v2.name].tab = v.name
-                                menu.options[v.name][g_name][v2.name].group = g_name
-                                menu.options[v.name][g_name][v2.name].key = v2.name
                                 if v2.extra ~= nil then
                                     if v2.extra.type == "keybind" then
                                         menu.options[v.name][g_name][v2.name][5] = {}
@@ -944,7 +893,7 @@ function menu.Initialize(menutable)
                                             if cb then cb(newval) end
                                         end)
                                         menu.options[v.name][g_name][v2.name][5].event = ev
-                                        menu.options[v.name][g_name][v2.name][5].bind = table.insert(menu.keybinds, {
+                                        table.insert(menu.keybinds, {
                                             menu.options[v.name][g_name][v2.name],
                                             tostring(v2.name), tostring(g_name), tostring(v.name),
                                         })
@@ -960,9 +909,7 @@ function menu.Initialize(menutable)
                                         menu.options[v.name][g_name][v2.name][5].callback = v2.extra.callback
                                     elseif v2.extra.type == "double colorpicker" then
                                         menu.options[v.name][g_name][v2.name][5] = {}
-                                        menu.options[v.name][g_name][v2.name][5][1] = {}
-                                        menu.options[v.name][g_name][v2.name][5][1][1] = {}
-                                        menu.options[v.name][g_name][v2.name][5][1][2] = {}
+                                        menu.options[v.name][g_name][v2.name][5][1] = { {}, {} }
                                         menu.options[v.name][g_name][v2.name][5][2] = v2.extra.type
                                         menu.options[v.name][g_name][v2.name][5].callback = v2.extra.callback
                                         for i = 1, 2 do
@@ -988,7 +935,7 @@ function menu.Initialize(menutable)
                                 menu.options[v.name][g_name][v2.name][5] = false
                                 menu.options[v.name][g_name][v2.name][6] = { v2.minvalue, v2.maxvalue }
                                 menu.options[v.name][g_name][v2.name][7] = { v1.x+7+v1.width-38, v1.y+y_pos-1 }
-                                menu.options[v.name][g_name][v2.name].decimal = v2.decimal == nil and nil or v2.decimal
+                                menu.options[v.name][g_name][v2.name].decimal = v2.decimal
                                 menu.options[v.name][g_name][v2.name].stepsize = v2.stepsize
                                 menu.options[v.name][g_name][v2.name].custom = v2.custom or {}
                                 menu.options[v.name][g_name][v2.name].callback = v2.callback
@@ -1100,8 +1047,7 @@ function menu.Initialize(menutable)
                     end
                     local group_vals = {}
                     for _i, _v in ipairs(v1.name) do
-                        if _i == 1 then group_vals[_v] = true
-                        else group_vals[_v] = false end
+                        group_vals[_v] = (_i == 1)
                     end
                     table.insert(menu.multigroups[v.name], { vals = group_vals, drawn = drawn })
                 end
@@ -1116,11 +1062,9 @@ function menu.Initialize(menutable)
     end
     menu.list.removeall = function(list)
         list[5] = {}
-        for k, v in pairs(list[4].liststuff) do
-            for i, v1 in ipairs(v) do
-                for i1, v2 in ipairs(v1) do
-                    v2.Visible = false
-                end
+        for _, v in pairs(list[4].liststuff) do
+            for _, v1 in ipairs(v) do
+                for _, v2 in ipairs(v1) do v2.Visible = false end
             end
         end
     end
@@ -1138,28 +1082,21 @@ function menu.Initialize(menutable)
         barguy[2][2] = (11 + ((((menu.w-20)/#menutable)-2) * (slot-1))) + ((slot-1)*2)
         barguy[2][3] = 58
         for k, v in pairs(tabs) do
-            if k == slot then
-                v[1].Visible = false
-                v[3].Color = RGB(255,255,255)
-            else
-                v[3].Color = RGB(170,170,170)
-                v[1].Visible = true
-            end
+            if k == slot then v[1].Visible = false; v[3].Color = RGB(255,255,255)
+            else v[3].Color = RGB(170,170,170); v[1].Visible = true end
         end
         for k, v in pairs(tabz) do
             if k == slot then
-                for k1, v1 in pairs(v) do v1.Visible = true end
+                for _, v1 in pairs(v) do v1.Visible = true end
             else
-                for k1, v1 in pairs(v) do v1.Visible = false end
+                for _, v1 in pairs(v) do v1.Visible = false end
             end
         end
         for k, v in pairs(menu.multigroups) do
             if menu.tabnames[menu.activetab] == k then
-                for k1, v1 in pairs(v) do
+                for _, v1 in pairs(v) do
                     for k2, v2 in pairs(v1.vals) do
-                        for k3, v3 in pairs(menu.mgrouptabz[k][k2]) do
-                            v3.Visible = v2
-                        end
+                        for _, v3 in pairs(menu.mgrouptabz[k][k2]) do v3.Visible = v2 end
                     end
                 end
             end
@@ -1172,24 +1109,17 @@ function menu.Initialize(menutable)
     Draw:OutlinedText("+", 1, false, 10, 10, 14, false, {225,225,225,255}, {20,20,20}, plusminus)
 
     local function set_plusminus(value, x, y)
-        for i, v in ipairs(plusminus) do
-            if value == 0 then v.Visible = false else v.Visible = true end
-        end
+        for _, v in ipairs(plusminus) do v.Visible = (value ~= 0) end
         if value ~= 0 then
             plusminus[1].Position = Vector2.new(x+3+menu.x, y-5+menu.y)
             plusminus[2].Position = Vector2.new(x+13+menu.x, y-1+menu.y)
             if value == 1 then
-                for i, v in ipairs(plusminus) do
-                    v.Color = RGB(225,225,225)
-                    v.OutlineColor = RGB(20,20,20)
+                for _, v in ipairs(plusminus) do
+                    v.Color = RGB(225,225,225); v.OutlineColor = RGB(20,20,20)
                 end
             else
                 for i, v in ipairs(plusminus) do
-                    if i + 1 == value then
-                        v.Color = RGB(menu.mc[1], menu.mc[2], menu.mc[3])
-                    else
-                        v.Color = RGB(255,255,255)
-                    end
+                    v.Color = (i+1 == value) and RGB(menu.mc[1], menu.mc[2], menu.mc[3]) or RGB(255,255,255)
                     v.OutlineColor = RGB(0,0,0)
                 end
             end
@@ -1197,40 +1127,35 @@ function menu.Initialize(menutable)
     end
     set_plusminus(0, 20, 20)
 
-    local dropboxthingy = {}
-    local dropboxtexty = {}
+    local dropboxthingy, dropboxtexty = {}, {}
     Draw:OutlinedRect(false, 20, 20, 100, 22, {20,20,20,255}, dropboxthingy)
     Draw:OutlinedRect(false, 21, 21, 98, 20, {0,0,0,255}, dropboxthingy)
     Draw:FilledRect(false, 22, 22, 96, 18, {45,45,45,255}, dropboxthingy)
-    for i = 1, 30 do
+    for _ = 1, 30 do
         Draw:OutlinedText("", 2, false, 20, 20, 13, false, {255,255,255,255}, {0,0,0}, dropboxtexty)
     end
 
     local function set_dropboxthingy(visible, x, y, length, value, values)
-        for k, v in pairs(dropboxthingy) do v.Visible = visible end
+        for _, v in pairs(dropboxthingy) do v.Visible = visible end
         dropboxthingy[1].Position = Vector2.new(x, y)
         dropboxthingy[2].Position = Vector2.new(x+1, y+1)
         dropboxthingy[3].Position = Vector2.new(x+2, y+22)
         dropboxthingy[1].Size = Vector2.new(length, 21*(#values+1)+3)
         dropboxthingy[2].Size = Vector2.new(length-2, (21*(#values+1))+1)
-        dropboxthingy[3].Size = Vector2.new(length-4, (21*#values)+1-1)
+        dropboxthingy[3].Size = Vector2.new(length-4, (21*#values))
         if visible then
             for i = 1, #values do
                 dropboxtexty[i].Position = Vector2.new(x+6, y+26+((i-1)*21))
                 dropboxtexty[i].Visible = true
                 dropboxtexty[i].Text = values[i]
-                if i == value then
-                    dropboxtexty[i].Color = RGB(menu.mc[1], menu.mc[2], menu.mc[3])
-                else
-                    dropboxtexty[i].Color = RGB(255,255,255)
-                end
+                dropboxtexty[i].Color = (i == value) and RGB(menu.mc[1], menu.mc[2], menu.mc[3]) or RGB(255,255,255)
             end
         else
-            for k, v in pairs(dropboxtexty) do v.Visible = false end
+            for _, v in pairs(dropboxtexty) do v.Visible = false end
         end
     end
     local function set_comboboxthingy(visible, x, y, length, values)
-        for k, v in pairs(dropboxthingy) do v.Visible = visible end
+        for _, v in pairs(dropboxthingy) do v.Visible = visible end
         dropboxthingy[1].Position = Vector2.new(x, y)
         dropboxthingy[2].Position = Vector2.new(x+1, y+1)
         dropboxthingy[3].Position = Vector2.new(x+2, y+22)
@@ -1242,17 +1167,14 @@ function menu.Initialize(menutable)
                 dropboxtexty[i].Position = Vector2.new(x+6, y+26+((i-1)*22))
                 dropboxtexty[i].Visible = true
                 dropboxtexty[i].Text = values[i][1]
-                if values[i][2] then
-                    dropboxtexty[i].Color = RGB(menu.mc[1], menu.mc[2], menu.mc[3])
-                else
-                    dropboxtexty[i].Color = RGB(255,255,255)
-                end
+                dropboxtexty[i].Color = values[i][2]
+                    and RGB(menu.mc[1], menu.mc[2], menu.mc[3]) or RGB(255,255,255)
             end
         else
-            for k, v in pairs(dropboxtexty) do v.Visible = false end
+            for _, v in pairs(dropboxtexty) do v.Visible = false end
         end
     end
-    set_dropboxthingy(false, 400, 200, 160, 1, {"HI q","HI q","HI q"})
+    set_dropboxthingy(false, 400, 200, 160, 1, {"q","q","q"})
 
     local modeselect = {}
     Draw:OutlinedRect(false, 20, 20, 100, 22, {20,20,20,255}, modeselect)
@@ -1264,7 +1186,7 @@ function menu.Initialize(menutable)
             {255,255,255,255}, {0,0,0}, modeselect)
     end
     local function set_modeselect(visible, x, y, value)
-        for k, v in pairs(modeselect) do v.Visible = visible end
+        for _, v in pairs(modeselect) do v.Visible = visible end
         if visible then
             modeselect[1].Position = Vector2.new(x, y)
             modeselect[2].Position = Vector2.new(x+1, y+1)
@@ -1274,11 +1196,8 @@ function menu.Initialize(menutable)
             modeselect[3].Size = Vector2.new(70-4, 22*4-5)
             for i = 1, 4 do
                 modeselect[i+3].Position = Vector2.new(x+6, y+4+((i-1)*21))
-                if value == i then
-                    modeselect[i+3].Color = RGB(menu.mc[1], menu.mc[2], menu.mc[3])
-                else
-                    modeselect[i+3].Color = RGB(255,255,255)
-                end
+                modeselect[i+3].Color = (value == i)
+                    and RGB(menu.mc[1], menu.mc[2], menu.mc[3]) or RGB(255,255,255)
             end
         end
     end
@@ -1291,17 +1210,12 @@ function menu.Initialize(menutable)
         hsv = { h = 0, s = 0, v = 0, a = 0 },
         postable = {}, drawings = {},
     }
-
-    local function CPOutline(visible, x, y, w, h, clr, tbl)
+    local function CPOutlined(visible, x, y, w, h, clr, tbl)
         Draw:OutlinedRect(visible, x+cp.x, y+cp.y, w, h, clr, tbl)
         table.insert(cp.postable, { tbl[#tbl], x, y })
     end
-    local function CPRect(visible, x, y, w, h, clr, tbl)
+    local function CPFilled(visible, x, y, w, h, clr, tbl)
         Draw:FilledRect(visible, x+cp.x, y+cp.y, w, h, clr, tbl)
-        table.insert(cp.postable, { tbl[#tbl], x, y })
-    end
-    local function CPImage(visible, data, x, y, w, h, tr, tbl)
-        Draw:Image(visible, data, x, y, w, h, tr, tbl)
         table.insert(cp.postable, { tbl[#tbl], x, y })
     end
     local function CPText(text, visible, centered, x, y, tbl)
@@ -1309,40 +1223,39 @@ function menu.Initialize(menutable)
             {255,255,255,255}, {0,0,0}, tbl)
         table.insert(cp.postable, { tbl[#tbl], x, y })
     end
-
-    CPRect(false, 1, 1, cp.w, cp.h, {35,35,35,255}, cp.drawings)
-    CPOutline(false, 1, 1, cp.w, cp.h, {0,0,0,255}, cp.drawings)
-    CPOutline(false, 2, 2, cp.w-2, cp.h-2, {20,20,20,255}, cp.drawings)
-    CPOutline(false, 3, 3, cp.w-3, 1, {127,72,163,255}, cp.drawings)
+    CPFilled(false, 1, 1, cp.w, cp.h, {35,35,35,255}, cp.drawings)
+    CPOutlined(false, 1, 1, cp.w, cp.h, {0,0,0,255}, cp.drawings)
+    CPOutlined(false, 2, 2, cp.w-2, cp.h-2, {20,20,20,255}, cp.drawings)
+    CPOutlined(false, 3, 3, cp.w-3, 1, {127,72,163,255}, cp.drawings)
     table.insert(menu.clrs.norm, cp.drawings[#cp.drawings])
-    CPOutline(false, 3, 4, cp.w-3, 1, {87,32,123,255}, cp.drawings)
+    CPOutlined(false, 3, 4, cp.w-3, 1, {87,32,123,255}, cp.drawings)
     table.insert(menu.clrs.dark, cp.drawings[#cp.drawings])
-    CPOutline(false, 3, 5, cp.w-3, 1, {20,20,20,255}, cp.drawings)
+    CPOutlined(false, 3, 5, cp.w-3, 1, {20,20,20,255}, cp.drawings)
     CPText("color picker", false, false, 7, 6, cp.drawings)
     CPText("x", false, false, 268, 4, cp.drawings)
-    CPOutline(false, 10, 23, 160, 160, {30,30,30,255}, cp.drawings)
-    CPOutline(false, 11, 24, 158, 158, {0,0,0,255}, cp.drawings)
-    CPRect(false, 12, 25, 156, 156, {0,0,0,255}, cp.drawings)
+    CPOutlined(false, 10, 23, 160, 160, {30,30,30,255}, cp.drawings)
+    CPOutlined(false, 11, 24, 158, 158, {0,0,0,255}, cp.drawings)
+    CPFilled(false, 12, 25, 156, 156, {0,0,0,255}, cp.drawings)
     local maincolor = cp.drawings[#cp.drawings]
     local alphabar = {}
-    CPOutline(false, 10, 189, 160, 14, {30,30,30,255}, cp.drawings)
+    CPOutlined(false, 10, 189, 160, 14, {30,30,30,255}, cp.drawings)
     table.insert(alphabar, cp.drawings[#cp.drawings])
-    CPOutline(false, 11, 190, 158, 12, {0,0,0,255}, cp.drawings)
+    CPOutlined(false, 11, 190, 158, 12, {0,0,0,255}, cp.drawings)
     table.insert(alphabar, cp.drawings[#cp.drawings])
-    CPOutline(false, 176, 23, 14, 160, {30,30,30,255}, cp.drawings)
-    CPOutline(false, 177, 24, 12, 158, {0,0,0,255}, cp.drawings)
+    CPOutlined(false, 176, 23, 14, 160, {30,30,30,255}, cp.drawings)
+    CPOutlined(false, 177, 24, 12, 158, {0,0,0,255}, cp.drawings)
     CPText("New Color", false, false, 198, 23, cp.drawings)
-    CPOutline(false, 197, 37, 75, 40, {30,30,30,255}, cp.drawings)
-    CPOutline(false, 198, 38, 73, 38, {0,0,0,255}, cp.drawings)
-    CPRect(false, 199, 39, 71, 36, {255,0,0,255}, cp.drawings)
+    CPOutlined(false, 197, 37, 75, 40, {30,30,30,255}, cp.drawings)
+    CPOutlined(false, 198, 38, 73, 38, {0,0,0,255}, cp.drawings)
+    CPFilled(false, 199, 39, 71, 36, {255,0,0,255}, cp.drawings)
     local newcolor = cp.drawings[#cp.drawings]
     CPText("copy", false, true, 234, 41, cp.drawings)
     CPText("paste", false, true, 235, 56, cp.drawings)
     local newcopy = { cp.drawings[#cp.drawings-1], cp.drawings[#cp.drawings] }
     CPText("Old Color", false, false, 198, 77, cp.drawings)
-    CPOutline(false, 197, 91, 75, 40, {30,30,30,255}, cp.drawings)
-    CPOutline(false, 198, 92, 73, 38, {0,0,0,255}, cp.drawings)
-    CPRect(false, 199, 93, 71, 36, {255,0,0,255}, cp.drawings)
+    CPOutlined(false, 197, 91, 75, 40, {30,30,30,255}, cp.drawings)
+    CPOutlined(false, 198, 92, 73, 38, {0,0,0,255}, cp.drawings)
+    CPFilled(false, 199, 93, 71, 36, {255,0,0,255}, cp.drawings)
     local oldcolor = cp.drawings[#cp.drawings]
     CPText("copy", false, true, 234, 103, cp.drawings)
     local oldcopy = { cp.drawings[#cp.drawings] }
@@ -1350,69 +1263,52 @@ function menu.Initialize(menutable)
     local applytext = cp.drawings[#cp.drawings]
 
     local function set_newcolor(r, g, b, a)
-        newcolor.Color = RGB(r, g, b)
-        newcolor.Transparency = a ~= nil and a/255 or 1
+        newcolor.Color = RGB(r, g, b); newcolor.Transparency = a ~= nil and a/255 or 1
     end
     local function set_oldcolor(r, g, b, a)
-        oldcolor.Color = RGB(r, g, b)
-        oldcolor.Transparency = a ~= nil and a/255 or 1
+        oldcolor.Color = RGB(r, g, b); oldcolor.Transparency = a ~= nil and a/255 or 1
     end
 
-    local dragbar_r = {}
-    Draw:OutlinedRect(true, 30, 30, 16, 5, {0,0,0,255}, cp.drawings)
-    table.insert(dragbar_r, cp.drawings[#cp.drawings])
-    Draw:OutlinedRect(true, 31, 31, 14, 3, {255,255,255,255}, cp.drawings)
-    table.insert(dragbar_r, cp.drawings[#cp.drawings])
-    local dragbar_b = {}
-    Draw:OutlinedRect(true, 30, 30, 5, 16, {0,0,0,255}, cp.drawings)
-    table.insert(dragbar_b, cp.drawings[#cp.drawings])
-    table.insert(alphabar, cp.drawings[#cp.drawings])
-    Draw:OutlinedRect(true, 31, 31, 3, 14, {255,255,255,255}, cp.drawings)
-    table.insert(dragbar_b, cp.drawings[#cp.drawings])
-    table.insert(alphabar, cp.drawings[#cp.drawings])
-    local dragbar_m = {}
-    Draw:OutlinedRect(true, 30, 30, 5, 5, {0,0,0,255}, cp.drawings)
-    table.insert(dragbar_m, cp.drawings[#cp.drawings])
-    Draw:OutlinedRect(true, 31, 31, 3, 3, {255,255,255,255}, cp.drawings)
-    table.insert(dragbar_m, cp.drawings[#cp.drawings])
+    local dragbar_r, dragbar_b, dragbar_m = {}, {}, {}
+    Draw:OutlinedRect(true, 30, 30, 16, 5, {0,0,0,255}, cp.drawings); table.insert(dragbar_r, cp.drawings[#cp.drawings])
+    Draw:OutlinedRect(true, 31, 31, 14, 3, {255,255,255,255}, cp.drawings); table.insert(dragbar_r, cp.drawings[#cp.drawings])
+    Draw:OutlinedRect(true, 30, 30, 5, 16, {0,0,0,255}, cp.drawings); table.insert(dragbar_b, cp.drawings[#cp.drawings]); table.insert(alphabar, cp.drawings[#cp.drawings])
+    Draw:OutlinedRect(true, 31, 31, 3, 14, {255,255,255,255}, cp.drawings); table.insert(dragbar_b, cp.drawings[#cp.drawings]); table.insert(alphabar, cp.drawings[#cp.drawings])
+    Draw:OutlinedRect(true, 30, 30, 5, 5, {0,0,0,255}, cp.drawings); table.insert(dragbar_m, cp.drawings[#cp.drawings])
+    Draw:OutlinedRect(true, 31, 31, 3, 3, {255,255,255,255}, cp.drawings); table.insert(dragbar_m, cp.drawings[#cp.drawings])
 
     local function set_dragbar_r(x, y)
-        dragbar_r[1].Position = Vector2.new(x, y)
-        dragbar_r[2].Position = Vector2.new(x+1, y+1)
+        dragbar_r[1].Position = Vector2.new(x, y); dragbar_r[2].Position = Vector2.new(x+1, y+1)
     end
     local function set_dragbar_b(x, y)
-        dragbar_b[1].Position = Vector2.new(x, y)
-        dragbar_b[2].Position = Vector2.new(x+1, y+1)
+        dragbar_b[1].Position = Vector2.new(x, y); dragbar_b[2].Position = Vector2.new(x+1, y+1)
     end
     local function set_dragbar_m(x, y)
-        dragbar_m[1].Position = Vector2.new(x, y)
-        dragbar_m[2].Position = Vector2.new(x+1, y+1)
+        dragbar_m[1].Position = Vector2.new(x, y); dragbar_m[2].Position = Vector2.new(x+1, y+1)
     end
 
     local function set_colorpicker(visible, color, value, alpha, text, x, y)
-        for k, v in pairs(cp.drawings) do v.Visible = visible end
+        for _, v in pairs(cp.drawings) do v.Visible = visible end
         if visible then
             cp.x = clamp(x, 0, SCREEN_SIZE.x - cp.w)
             cp.y = clamp(y, 0, SCREEN_SIZE.y - cp.h)
-            for k, v in pairs(cp.postable) do
+            for _, v in pairs(cp.postable) do
                 v[1].Position = Vector2.new(cp.x + v[2], cp.y + v[3])
             end
-            local tempclr = RGB(color[1], color[2], color[3])
-            local h, s, v = tempclr:ToHSV()
-            cp.hsv.h = h; cp.hsv.s = s; cp.hsv.v = v
+            local h, s, v = RGB(color[1], color[2], color[3]):ToHSV()
+            cp.hsv.h, cp.hsv.s, cp.hsv.v = h, s, v
             set_dragbar_r(cp.x+175, cp.y+23+math.floor((1-h)*156))
             set_dragbar_m(cp.x+9+math.floor(s*156), cp.y+23+math.floor((1-v)*156))
             if not alpha then
                 set_newcolor(color[1], color[2], color[3])
                 set_oldcolor(color[1], color[2], color[3])
                 cp.alpha = false
-                for k, v in pairs(alphabar) do v.Visible = false end
+                for _, d in pairs(alphabar) do d.Visible = false end
                 cp.h = 191
                 for i = 1, 2 do cp.drawings[i].Size = Vector2.new(cp.w, cp.h) end
                 cp.drawings[3].Size = Vector2.new(cp.w-2, cp.h-2)
             else
-                cp.hsv.a = color[4]
-                cp.alpha = true
+                cp.hsv.a = color[4]; cp.alpha = true
                 set_newcolor(color[1], color[2], color[3], color[4])
                 set_oldcolor(color[1], color[2], color[3], color[4])
                 cp.h = 211
@@ -1429,47 +1325,42 @@ function menu.Initialize(menutable)
 
     -- Tooltip
     local tooltip = { x = 0, y = 0, time = 0, active = false, text = "", drawings = {}, postable = {} }
-    local function ttOutline(visible, x, y, w, h, clr, tbl)
+    local function ttOutlined(visible, x, y, w, h, clr, tbl)
         Draw:OutlinedRect(visible, x+tooltip.x, y+tooltip.y, w, h, clr, tbl)
         table.insert(tooltip.postable, { tbl[#tbl], x, y })
     end
-    local function ttRect(visible, x, y, w, h, clr, tbl)
+    local function ttFilled(visible, x, y, w, h, clr, tbl)
         Draw:FilledRect(visible, x+tooltip.x, y+tooltip.y, w, h, clr, tbl)
         table.insert(tooltip.postable, { tbl[#tbl], x, y })
     end
-    local function ttText(text, visible, centered, x, y, tbl)
-        Draw:OutlinedText(text, 2, visible, x+tooltip.x, y+tooltip.y, 13, centered,
+    local function ttText(text, visible, x, y, tbl)
+        Draw:OutlinedText(text, 2, visible, x+tooltip.x, y+tooltip.y, 13, false,
             {255,255,255,255}, {0,0,0}, tbl)
         table.insert(tooltip.postable, { tbl[#tbl], x, y })
     end
-    ttRect(false, tooltip.x+1, tooltip.y+1, 1, 28, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tooltip.drawings)
-    ttRect(false, tooltip.x+2, tooltip.y+1, 1, 28, {menu.mc[1]-40, menu.mc[2]-40, menu.mc[3]-40, 255}, tooltip.drawings)
-    ttOutline(false, tooltip.x, tooltip.y, 4, 30, {20,20,20,255}, tooltip.drawings)
-    ttRect(false, tooltip.x+4, tooltip.y, 100, 30, {40,40,40,255}, tooltip.drawings)
-    ttOutline(false, tooltip.x-1, tooltip.y-1, 102, 32, {0,0,0,255}, tooltip.drawings)
-    ttOutline(false, tooltip.x+3, tooltip.y, 102, 30, {20,20,20,255}, tooltip.drawings)
-    ttText(tooltip.text, false, false, tooltip.x+7, tooltip.y+1, tooltip.drawings)
+    ttFilled(false, 1, 1, 1, 28, {menu.mc[1], menu.mc[2], menu.mc[3], 255}, tooltip.drawings)
+    ttFilled(false, 2, 1, 1, 28, {menu.mc[1]-40, menu.mc[2]-40, menu.mc[3]-40, 255}, tooltip.drawings)
+    ttOutlined(false, 0, 0, 4, 30, {20,20,20,255}, tooltip.drawings)
+    ttFilled(false, 4, 0, 100, 30, {40,40,40,255}, tooltip.drawings)
+    ttOutlined(false, -1, -1, 102, 32, {0,0,0,255}, tooltip.drawings)
+    ttOutlined(false, 3, 0, 102, 30, {20,20,20,255}, tooltip.drawings)
+    ttText(tooltip.text, false, 7, 1, tooltip.drawings)
 
     local function set_tooltip(x, y, text, visible, dt)
         dt = dt or 0
-        x = x or tooltip.x
-        y = y or tooltip.y
-        tooltip.x = x; tooltip.y = y
+        tooltip.x = x or tooltip.x
+        tooltip.y = y or tooltip.y
         if tooltip.time < 1 and visible then
-            if tooltip.time < -2 then tooltip.time = -2 end
-            tooltip.time += dt
+            tooltip.time = math.max(tooltip.time + dt, -2)
         else
-            tooltip.time -= dt
-            if tooltip.time < -1 then tooltip.time = -1 end
+            tooltip.time = math.max(tooltip.time - dt, -1)
         end
         if tooltip.time > 1 then tooltip.time = 1 end
-        for k, v in ipairs(tooltip.drawings) do
-            v.Visible = tooltip.time > 0
-        end
+        for _, v in ipairs(tooltip.drawings) do v.Visible = tooltip.time > 0 end
         tooltip.active = visible
         if text then tooltip.drawings[7].Text = text end
-        for k, v in pairs(tooltip.postable) do
-            v[1].Position = Vector2.new(x + v[2], y + v[3])
+        for _, v in pairs(tooltip.postable) do
+            v[1].Position = Vector2.new(tooltip.x + v[2], tooltip.y + v[3])
             v[1].Transparency = (0.3 + tooltip.time) ^ 3 - 1
             if not menu.open then v[1].Transparency = 0 end
         end
@@ -1485,16 +1376,15 @@ function menu.Initialize(menutable)
     end
     set_tooltip(500, 500, "", false)
 
-    -- Menu color application
     function menu:set_menu_clr(r, g, b)
         menu.watermark.rect[1].Color = RGB(r-40, g-40, b-40)
         menu.watermark.rect[2].Color = RGB(r, g, b)
-        for k, v in pairs(menu.clrs.norm) do v.Color = RGB(r, g, b) end
-        for k, v in pairs(menu.clrs.dark) do v.Color = RGB(r-40, g-40, b-40) end
-        local menucolor = { r, g, b }
-        for k, v in pairs(menu.options) do
-            for k1, v1 in pairs(v) do
-                for k2, v2 in pairs(v1) do
+        for _, v in pairs(menu.clrs.norm) do v.Color = RGB(r, g, b) end
+        for _, v in pairs(menu.clrs.dark) do v.Color = RGB(r-40, g-40, b-40) end
+        local mc = { r, g, b }
+        for _, v in pairs(menu.options) do
+            for _, v1 in pairs(v) do
+                for _, v2 in pairs(v1) do
                     if v2[2] == "toggle" then
                         if not v2[1] then
                             for i = 0, 3 do
@@ -1506,16 +1396,16 @@ function menu.Initialize(menutable)
                         else
                             for i = 0, 3 do
                                 v2[4][i+1].Color = ColorRange(i, {
-                                    [1] = {start=0, color=RGB(menucolor[1], menucolor[2], menucolor[3])},
-                                    [2] = {start=3, color=RGB(menucolor[1]-40, menucolor[2]-40, menucolor[3]-40)},
+                                    [1] = {start=0, color=RGB(mc[1], mc[2], mc[3])},
+                                    [2] = {start=3, color=RGB(mc[1]-40, mc[2]-40, mc[3]-40)},
                                 })
                             end
                         end
                     elseif v2[2] == "slider" then
                         for i = 0, 3 do
                             v2[4][i+1].Color = ColorRange(i, {
-                                [1] = {start=0, color=RGB(menucolor[1], menucolor[2], menucolor[3])},
-                                [2] = {start=3, color=RGB(menucolor[1]-40, menucolor[2]-40, menucolor[3]-40)},
+                                [1] = {start=0, color=RGB(mc[1], mc[2], mc[3])},
+                                [2] = {start=3, color=RGB(mc[1]-40, mc[2]-40, mc[3]-40)},
                             })
                         end
                     end
@@ -1525,12 +1415,10 @@ function menu.Initialize(menutable)
     end
 
     local function UpdateConfigs()
-        local configthing = menu.options["Settings"]["Configuration"]["Configs"]
-        configthing[6] = GetConfigs()
-        if configthing[1] > #configthing[6] then
-            configthing[1] = #configthing[6]
-        end
-        configthing[4][1].Text = configthing[6][configthing[1]]
+        local cfgo = menu.options["Settings"]["Configuration"]["Configs"]
+        cfgo[6] = GetConfigs()
+        if cfgo[1] > #cfgo[6] then cfgo[1] = #cfgo[6] end
+        cfgo[4][1].Text = cfgo[6][cfgo[1]]
     end
 
     menu.keybind_open = nil
@@ -1538,63 +1426,64 @@ function menu.Initialize(menutable)
     menu.colorpicker_open = false
     menu.textboxopen = nil
 
-    function menu:InputBeganMenu(key)
-        if key.KeyCode == Enum.KeyCode.RightShift and not loadingthing.Visible then
-            cp.dragging_m = false
-            cp.dragging_r = false
-            cp.dragging_b = false
-            UpdateConfigs()
-            if menu.open and not menu.fading then
-                for k = 1, #menu.options do
-                    local v = menu.options[k]
-                    for k1, v1 in pairs(v) do
-                        for k2, v2 in pairs(v1) do
-                            if v2[2] == "slider" and v2[5] then v2[5] = false
-                            elseif v2[2] == "dropbox" and v2[5] then v2[5] = false
-                            elseif v2[2] == "combobox" and v2[5] then v2[5] = false
-                            elseif v2[2] == "toggle" then
-                                if v2[5] ~= nil then
-                                    if v2[5][2] == "keybind" and v2[5][5] then
-                                        v2[5][4][2].Color = RGB(30,30,30)
-                                        v2[5][5] = false
-                                    elseif v2[5][2] == "single colorpicker" and v2[5][5] then
-                                        v2[5][5] = false
-                                    end
-                                end
-                            elseif v2[2] == "button" then
-                                if v2[1] then
-                                    for i = 0, 8 do
-                                        v2[4][i+1].Color = ColorRange(i, {
-                                            [1] = {start=0, color=RGB(50,50,50)},
-                                            [2] = {start=8, color=RGB(35,35,35)},
-                                        })
-                                    end
-                                    v2[1] = false
-                                end
-                            end
+    -- Cleanly close any open transient UI (used by both RightShift and Menu Toggle)
+    local function close_transient_ui()
+        cp.dragging_m = false; cp.dragging_r = false; cp.dragging_b = false
+        for _, v in pairs(menu.options) do
+            for _, v1 in pairs(v) do
+                for _, v2 in pairs(v1) do
+                    if v2[2] == "slider" and v2[5] then v2[5] = false
+                    elseif v2[2] == "dropbox" and v2[5] then v2[5] = false
+                    elseif v2[2] == "combobox" and v2[5] then v2[5] = false
+                    elseif v2[2] == "toggle" and v2[5] ~= nil then
+                        if v2[5][2] == "keybind" and v2[5][5] then
+                            v2[5][4][2].Color = RGB(30,30,30); v2[5][5] = false
+                        elseif v2[5][2] == "single colorpicker" and v2[5][5] then
+                            v2[5][5] = false
                         end
+                    elseif v2[2] == "button" and v2[1] then
+                        for i = 0, 8 do
+                            v2[4][i+1].Color = ColorRange(i, {
+                                [1] = {start=0, color=RGB(50,50,50)},
+                                [2] = {start=8, color=RGB(35,35,35)},
+                            })
+                        end
+                        v2[1] = false
                     end
                 end
-                menu.keybind_open = nil
-                set_modeselect(false, 20, 20, 1)
-                menu.dropbox_open = nil
-                set_dropboxthingy(false, 400, 200, 160, 1, {"HI q","HI q","HI q"})
-                menu.colorpicker_open = nil
-                set_tooltip(nil, nil, nil, false)
-                set_colorpicker(false, {255,0,0}, nil, false, "", 400, 200)
-            end
-            if not menu.fading then
-                menu.fading = true
-                menu.fadestart = tick()
             end
         end
+        menu.keybind_open = nil
+        set_modeselect(false, 20, 20, 1)
+        menu.dropbox_open = nil
+        set_dropboxthingy(false, 400, 200, 160, 1, {"q","q","q"})
+        menu.colorpicker_open = nil
+        set_tooltip(nil, nil, nil, false)
+        set_colorpicker(false, {255,0,0}, nil, false, "", 400, 200)
+    end
+
+    function menu:toggle_fade()
+        if not menu.ready or menu.fading or menu.unloaded then return end
+        if menu.open then close_transient_ui() end
+        menu.fading = true
+        menu.fadestart = tick()
+    end
+
+    function menu:InputBeganMenu(key)
+        -- RightShift: only closes transients (menu fade is now handled by the Menu Toggle)
+        if key.KeyCode == Enum.KeyCode.RightShift and not loadingthing.Visible then
+            if menu.open and not menu.fading then
+                close_transient_ui()
+            end
+        end
+
         if menu == nil then return end
 
         if menu.textboxopen then
             if key.KeyCode == Enum.KeyCode.RightShift or key.KeyCode == Enum.KeyCode.Return then
-                for k, v in pairs(menu.options) do
-                    for k1, v1 in pairs(v) do
-                        for k2, v2 in pairs(v1) do
+                for _, v in pairs(menu.options) do
+                    for _, v1 in pairs(v) do
+                        for _, v2 in pairs(v1) do
                             if v2[2] == "textbox" and v2[5] then
                                 v2[5] = false
                                 v2[4].Color = RGB(255,255,255)
@@ -1609,42 +1498,38 @@ function menu.Initialize(menutable)
         end
 
         if menu.open and not menu.fading then
-            for k, v in pairs(menu.options) do
-                for k1, v1 in pairs(v) do
-                    for k2, v2 in pairs(v1) do
-                        if v2[2] == "toggle" then
-                            if v2[5] ~= nil and v2[5][2] == "keybind" and v2[5][5] and key.KeyCode.Value ~= 0 then
+            for _, v in pairs(menu.options) do
+                for _, v1 in pairs(v) do
+                    for _, v2 in pairs(v1) do
+                        if v2[2] == "toggle" and v2[5] ~= nil then
+                            if v2[5][2] == "keybind" and v2[5][5] and key.KeyCode.Value ~= 0 then
                                 v2[5][4][2].Color = RGB(30,30,30)
                                 v2[5][4][1].Text = KeyEnumToName(key.KeyCode)
-                                if KeyEnumToName(key.KeyCode) == "None" then v2[5][1] = nil
-                                else v2[5][1] = key.KeyCode end
+                                v2[5][1] = (KeyEnumToName(key.KeyCode) == "None") and nil or key.KeyCode
                                 v2[5][5] = false
-                                if v2[5].callback then v2[5].callback(v2[5][1]) end
                             end
-                        elseif v2[2] == "textbox" then
-                            if v2[5] then
-                                if not INPUT_SERVICE:IsKeyDown(Enum.KeyCode.LeftControl) then
-                                    if string.len(v2[1]) <= 28 then
-                                        if table.find(textBoxLetters, KeyEnumToName(key.KeyCode)) then
-                                            if INPUT_SERVICE:IsKeyDown(Enum.KeyCode.LeftShift) then
-                                                v2[1] ..= string.upper(KeyEnumToName(key.KeyCode))
-                                            else
-                                                v2[1] ..= string.lower(KeyEnumToName(key.KeyCode))
-                                            end
-                                        elseif KeyEnumToName(key.KeyCode) == "Space" then
-                                            v2[1] ..= " "
-                                        elseif keymodifiernames[KeyEnumToName(key.KeyCode)] ~= nil then
-                                            if INPUT_SERVICE:IsKeyDown(Enum.KeyCode.LeftShift) then
-                                                v2[1] ..= KeyModifierToName(KeyEnumToName(key.KeyCode), v2[6])
-                                            else
-                                                v2[1] ..= KeyEnumToName(key.KeyCode)
-                                            end
-                                        elseif KeyEnumToName(key.KeyCode) == "Back" and v2[1] ~= "" then
-                                            v2[1] = string.sub(v2[1], 0, #v2[1] - 1)
+                        elseif v2[2] == "textbox" and v2[5] then
+                            if not INPUT_SERVICE:IsKeyDown(Enum.KeyCode.LeftControl) then
+                                if string.len(v2[1]) <= 28 then
+                                    if table.find(textBoxLetters, KeyEnumToName(key.KeyCode)) then
+                                        if INPUT_SERVICE:IsKeyDown(Enum.KeyCode.LeftShift) then
+                                            v2[1] ..= string.upper(KeyEnumToName(key.KeyCode))
+                                        else
+                                            v2[1] ..= string.lower(KeyEnumToName(key.KeyCode))
                                         end
+                                    elseif KeyEnumToName(key.KeyCode) == "Space" then
+                                        v2[1] ..= " "
+                                    elseif keymodifiernames[KeyEnumToName(key.KeyCode)] ~= nil then
+                                        if INPUT_SERVICE:IsKeyDown(Enum.KeyCode.LeftShift) then
+                                            v2[1] ..= KeyModifierToName(KeyEnumToName(key.KeyCode), v2[6])
+                                        else
+                                            v2[1] ..= KeyEnumToName(key.KeyCode)
+                                        end
+                                    elseif KeyEnumToName(key.KeyCode) == "Back" and v2[1] ~= "" then
+                                        v2[1] = string.sub(v2[1], 0, #v2[1] - 1)
                                     end
-                                    v2[4].Text = v2[1] .. "|"
                                 end
+                                v2[4].Text = v2[1] .. "|"
                             end
                         end
                     end
@@ -1659,13 +1544,9 @@ function menu.Initialize(menutable)
             local value = self.keybinds[i][1]
             if key.KeyCode == value[5][1] then
                 value[5].lastvalue = value[5].relvalue
-                if value[5].toggletype == 2 then
-                    value[5].relvalue = not value[5].relvalue
-                elseif value[5].toggletype == 1 then
-                    value[5].relvalue = true
-                elseif value[5].toggletype == 3 then
-                    value[5].relvalue = false
-                end
+                if value[5].toggletype == 2 then value[5].relvalue = not value[5].relvalue
+                elseif value[5].toggletype == 1 then value[5].relvalue = true
+                elseif value[5].toggletype == 3 then value[5].relvalue = false end
             elseif value[5].toggletype == 4 then
                 value[5].relvalue = true
             end
@@ -1680,11 +1561,8 @@ function menu.Initialize(menutable)
             local value = self.keybinds[i][1]
             value[5].lastvalue = value[5].relvalue
             if key.KeyCode == value[5][1] then
-                if value[5].toggletype == 1 then
-                    value[5].relvalue = false
-                elseif value[5].toggletype == 3 then
-                    value[5].relvalue = true
-                end
+                if value[5].toggletype == 1 then value[5].relvalue = false
+                elseif value[5].toggletype == 3 then value[5].relvalue = true end
             end
             if value[5].lastvalue ~= value[5].relvalue then
                 value[5].event:fire(value[5].relvalue)
@@ -1693,67 +1571,46 @@ function menu.Initialize(menutable)
     end
 
     function menu:SetMenuPos(x, y)
-        for k, v in pairs(menu.postable) do
-            if v[1].Visible then
-                v[1].Position = Vector2.new(x + v[2], y + v[3])
-            end
+        for _, v in pairs(menu.postable) do
+            if v[1].Visible then v[1].Position = Vector2.new(x + v[2], y + v[3]) end
         end
     end
 
-    function menu:MouseInArea(x, y, w, h)
-        return LOCAL_MOUSE.x > x and LOCAL_MOUSE.x < x+w
-           and LOCAL_MOUSE.y > 36+y and LOCAL_MOUSE.y < 36+y+h
-    end
     function menu:MouseInMenu(x, y, w, h)
-        return LOCAL_MOUSE.x > menu.x+x and LOCAL_MOUSE.x < menu.x+x+w
-           and LOCAL_MOUSE.y > menu.y-36+y and LOCAL_MOUSE.y < menu.y-36+y+h
+        return mouseX > menu.x+x and mouseX < menu.x+x+w
+           and mouseY > menu.y+y and mouseY < menu.y+y+h
     end
     function menu:MouseInColorPicker(x, y, w, h)
-        return LOCAL_MOUSE.x > cp.x+x and LOCAL_MOUSE.x < cp.x+x+w
-           and LOCAL_MOUSE.y > cp.y-36+y and LOCAL_MOUSE.y < cp.y-36+y+h
+        return mouseX > cp.x+x and mouseX < cp.x+x+w
+           and mouseY > cp.y+y and mouseY < cp.y+y+h
     end
 
     local keyz = {}
-    for k, v in pairs(Enum.KeyCode:GetEnumItems()) do
-        keyz[v.Value] = v
-    end
+    for _, v in pairs(Enum.KeyCode:GetEnumItems()) do keyz[v.Value] = v end
 
     function menu:GetVal(tab, groupbox, name, ...)
         local args = { ... }
-        local option = menu.options[tab][groupbox][name]
+        local opt = menu.options[tab][groupbox][name]
         if args[1] == nil then
-            if option[2] == "toggle" then
-                local lastval = option[7]
-                option[7] = option[1]
-                return option[1], lastval
-            elseif option[2] ~= "combobox" then
-                return option[1]
+            if opt[2] == "toggle" then
+                local lastval = opt[7]; opt[7] = opt[1]; return opt[1], lastval
+            elseif opt[2] ~= "combobox" then
+                return opt[1]
             else
-                local temptable = {}
-                for k, v in ipairs(option[1]) do
-                    table.insert(temptable, v[2])
-                end
-                return temptable
+                local t = {}
+                for _, v in ipairs(opt[1]) do table.insert(t, v[2]) end
+                return t
             end
         else
             if args[1] == "keybind" or args[1] == "color" then
-                if args[2] then
-                    return RGB(option[5][1][1], option[5][1][2], option[5][1][3])
-                else
-                    return option[5][1]
-                end
+                if args[2] then return RGB(opt[5][1][1], opt[5][1][2], opt[5][1][3])
+                else return opt[5][1] end
             elseif args[1] == "color1" then
-                if args[2] then
-                    return RGB(option[5][1][1][1][1], option[5][1][1][1][2], option[5][1][1][1][3])
-                else
-                    return option[5][1][1][1]
-                end
+                if args[2] then return RGB(opt[5][1][1][1][1], opt[5][1][1][1][2], opt[5][1][1][1][3])
+                else return opt[5][1][1][1] end
             elseif args[1] == "color2" then
-                if args[2] then
-                    return RGB(option[5][1][2][1][1], option[5][1][2][1][2], option[5][1][2][1][3])
-                else
-                    return option[5][1][2][1]
-                end
+                if args[2] then return RGB(opt[5][1][2][1][1], opt[5][1][2][1][2], opt[5][1][2][1][3])
+                else return opt[5][1][2][1] end
             end
         end
     end
@@ -1762,9 +1619,7 @@ function menu.Initialize(menutable)
         local option = self.options[tab][groupbox][name][5]
         if self:GetVal(tab, groupbox, name) then
             if option.toggletype ~= 0 then
-                if option.lastvalue == nil then
-                    option.lastvalue = option.relvalue
-                end
+                if option.lastvalue == nil then option.lastvalue = option.relvalue end
                 return option.relvalue, option.lastvalue, option.event
             else
                 return false
@@ -1778,163 +1633,195 @@ function menu.Initialize(menutable)
         if option.toggletype ~= 0 then
             option.lastvalue = option.relvalue
             option.relvalue = val
-            if option.lastvalue ~= option.relvalue then
-                option.event:fire(option.relvalue)
-            end
+            if option.lastvalue ~= option.relvalue then option.event:fire(option.relvalue) end
         end
     end
 
-    -- Config save/load
     local menuElementTypes = { "toggle", "slider", "dropbox", "textbox" }
     local doubleclickDelay = 4
     local buttonsInQue = {}
 
     local function SaveCurSettings()
-        local figgy = "BitchBot v2\nmade with <3 by nata and bitch\n\n"
-        for k, v in next, menuElementTypes do
-            figgy ..= v .. "s {\n"
-            for k1, v1 in pairs(menu.options) do
-                for k2, v2 in pairs(v1) do
-                    for k3, v3 in pairs(v2) do
-                        if v3[2] == tostring(v) and k3 ~= "Configs" and k3 ~= "Player Status" and k3 ~= "ConfigName" then
-                            figgy ..= k1.."|"..k2.."|"..k3.."|"..tostring(v3[1]).."\n"
+        local f = "DINGOSQUAD-UI v1\n\n"
+        for _, vt in next, menuElementTypes do
+            f ..= vt .. "s {\n"
+            for k, v in pairs(menu.options) do
+                for k1, v1 in pairs(v) do
+                    for k2, v2 in pairs(v1) do
+                        if v2[2] == vt and k2 ~= "Configs" and k2 ~= "ConfigName" then
+                            f ..= k.."|"..k1.."|"..k2.."|"..tostring(v2[1]).."\n"
                         end
                     end
                 end
             end
-            figgy = figgy .. "}\n"
+            f = f .. "}\n"
         end
-        figgy = figgy .. "comboboxes {\n"
+        f = f .. "comboboxes {\n"
         for k, v in pairs(menu.options) do
             for k1, v1 in pairs(v) do
                 for k2, v2 in pairs(v1) do
                     if v2[2] == "combobox" then
-                        local boolz = ""
-                        for k3, v3 in pairs(v2[1]) do
-                            boolz = boolz .. tostring(v3[2]) .. ", "
-                        end
-                        figgy = figgy .. k.."|"..k1.."|"..k2.."|"..boolz.."\n"
+                        local b = ""
+                        for _, v3 in pairs(v2[1]) do b = b .. tostring(v3[2]) .. ", " end
+                        f = f .. k.."|"..k1.."|"..k2.."|"..b.."\n"
                     end
                 end
             end
         end
-        figgy = figgy .. "}\nkeybinds {\n"
+        f = f .. "}\nkeybinds {\n"
         for k, v in pairs(menu.options) do
             for k1, v1 in pairs(v) do
                 for k2, v2 in pairs(v1) do
-                    if v2[2] == "toggle" and v2[5] ~= nil and v2[5][2] == "keybind" then
-                        if v2[5][1] == nil then
-                            figgy = figgy .. k.."|"..k1.."|"..k2.."|nil|"..tostring(v2[5].toggletype).."\n"
-                        else
-                            figgy = figgy .. k.."|"..k1.."|"..k2.."|"..tostring(v2[5][1].Value).."|"..tostring(v2[5].toggletype).."\n"
-                        end
+                    if v2[2] == "toggle" and v2[5] and v2[5][2] == "keybind" then
+                        local kv = v2[5][1] == nil and "nil" or tostring(v2[5][1].Value)
+                        f = f .. k.."|"..k1.."|"..k2.."|"..kv.."|"..tostring(v2[5].toggletype).."\n"
                     end
                 end
             end
         end
-        figgy = figgy .. "}\ncolorpickers {\n"
+        f = f .. "}\ncolorpickers {\n"
         for k, v in pairs(menu.options) do
             for k1, v1 in pairs(v) do
                 for k2, v2 in pairs(v1) do
-                    if v2[2] == "toggle" and v2[5] ~= nil and v2[5][2] == "single colorpicker" then
-                        local clrz = ""
-                        for k3, v3 in pairs(v2[5][1]) do
-                            clrz = clrz .. tostring(v3) .. ", "
-                        end
-                        figgy = figgy .. k.."|"..k1.."|"..k2.."|"..clrz.."\n"
+                    if v2[2] == "toggle" and v2[5] and v2[5][2] == "single colorpicker" then
+                        local c = ""
+                        for _, v3 in pairs(v2[5][1]) do c = c .. tostring(v3) .. ", " end
+                        f = f .. k.."|"..k1.."|"..k2.."|"..c.."\n"
                     end
                 end
             end
         end
-        figgy = figgy .. "}\ndouble colorpickers {\n"
+        f = f .. "}\ndouble colorpickers {\n"
         for k, v in pairs(menu.options) do
             for k1, v1 in pairs(v) do
                 for k2, v2 in pairs(v1) do
-                    if v2[2] == "toggle" and v2[5] ~= nil and v2[5][2] == "double colorpicker" then
-                        local clrz1 = ""
-                        for k3, v3 in pairs(v2[5][1][1][1]) do
-                            clrz1 = clrz1 .. tostring(v3) .. ", "
-                        end
-                        local clrz2 = ""
-                        for k3, v3 in pairs(v2[5][1][2][1]) do
-                            clrz2 = clrz2 .. tostring(v3) .. ", "
-                        end
-                        figgy = figgy .. k.."|"..k1.."|"..k2.."|"..clrz1.."|"..clrz2.."\n"
+                    if v2[2] == "toggle" and v2[5] and v2[5][2] == "double colorpicker" then
+                        local c1, c2 = "", ""
+                        for _, v3 in pairs(v2[5][1][1][1]) do c1 = c1 .. tostring(v3) .. ", " end
+                        for _, v3 in pairs(v2[5][1][2][1]) do c2 = c2 .. tostring(v3) .. ", " end
+                        f = f .. k.."|"..k1.."|"..k2.."|"..c1.."|"..c2.."\n"
                     end
                 end
             end
         end
-        figgy = figgy .. "}\n"
-        return figgy
+        f = f .. "}\n"
+        return f
     end
 
-    local function LoadConfig(loadedcfg)
+    local function LoadConfig(loaded)
         local lines = {}
-        for s in loadedcfg:gmatch("[^\r\n]+") do table.insert(lines, s) end
-        if lines[1] == "BitchBot v2" then
-            -- toggles
-            local start, end_
-            for i, v in next, lines do if v == "toggles {" then start = i break end end
-            for i, v in next, lines do if i > start and v == "}" then end_ = i break end end
-            if start and end_ then
-                for i = 1, end_ - start - 1 do
-                    local tt = string.split(lines[i+start], "|")
-                    if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] then
-                        menu.options[tt[1]][tt[2]][tt[3]][1] = (tt[4] == "true")
+        for s in loaded:gmatch("[^\r\n]+") do table.insert(lines, s) end
+
+        local function section(name)
+            local s, e
+            for i, v in next, lines do if v == name then s = i break end end
+            for i, v in next, lines do if s and i > s and v == "}" then e = i break end end
+            return s, e
+        end
+
+        if lines[1] == "DINGOSQUAD-UI v1" then
+            local s, e = section("toggles {")
+            if s and e then for i = 1, e - s - 1 do
+                local tt = string.split(lines[i+s], "|")
+                if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] then
+                    menu.options[tt[1]][tt[2]][tt[3]][1] = (tt[4] == "true")
+                end
+            end end
+
+            s, e = section("sliders {")
+            if s and e then for i = 1, e - s - 1 do
+                local tt = string.split(lines[i+s], "|")
+                if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] then
+                    menu.options[tt[1]][tt[2]][tt[3]][1] = tonumber(tt[4])
+                end
+            end end
+
+            s, e = section("dropboxs {")
+            if s and e then for i = 1, e - s - 1 do
+                local tt = string.split(lines[i+s], "|")
+                if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] then
+                    local num = tonumber(tt[4])
+                    if num > #menu.options[tt[1]][tt[2]][tt[3]][6] then num = #menu.options[tt[1]][tt[2]][tt[3]][6]
+                    elseif num < 0 then num = 1 end
+                    menu.options[tt[1]][tt[2]][tt[3]][1] = num
+                end
+            end end
+
+            s, e = section("textboxs {")
+            if s and e then for i = 1, e - s - 1 do
+                local tt = string.split(lines[i+s], "|")
+                if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] then
+                    menu.options[tt[1]][tt[2]][tt[3]][1] = tostring(tt[4])
+                end
+            end end
+
+            s, e = section("comboboxes {")
+            if s and e then for i = 1, e - s - 1 do
+                local tt = string.split(lines[i+s], "|")
+                if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] then
+                    local subs = string.split(tt[4], ",")
+                    for i2, v in ipairs(subs) do
+                        local opt = string.gsub(v, " ", "")
+                        if opt == "true" then menu.options[tt[1]][tt[2]][tt[3]][1][i2][2] = true
+                        else menu.options[tt[1]][tt[2]][tt[3]][1][i2][2] = false end
+                        if i2 == #subs - 1 then break end
                     end
                 end
-            end
-            -- sliders
-            start, end_ = nil, nil
-            for i, v in next, lines do if v == "sliders {" then start = i break end end
-            for i, v in next, lines do if i > start and v == "}" then end_ = i break end end
-            if start and end_ then
-                for i = 1, end_ - start - 1 do
-                    local tt = string.split(lines[i+start], "|")
-                    if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] then
-                        menu.options[tt[1]][tt[2]][tt[3]][1] = tonumber(tt[4])
+            end end
+
+            s, e = section("keybinds {")
+            if s and e then for i = 1, e - s - 1 do
+                local tt = string.split(lines[i+s], "|")
+                if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] and
+                   menu.options[tt[1]][tt[2]][tt[3]][5] ~= nil then
+                    if tt[5] ~= nil then
+                        local tt2 = clamp(tonumber(tt[5]), 1, 4)
+                        if menu.options[tt[1]][tt[2]][tt[3]][5].toggletype ~= 0 then
+                            menu.options[tt[1]][tt[2]][tt[3]][5].toggletype = tt2
+                        end
+                    end
+                    if tt[4] == "nil" then menu.options[tt[1]][tt[2]][tt[3]][5][1] = nil
+                    else menu.options[tt[1]][tt[2]][tt[3]][5][1] = keyz[tonumber(tt[4])] end
+                end
+            end end
+
+            s, e = section("colorpickers {")
+            if s and e then for i = 1, e - s - 1 do
+                local tt = string.split(lines[i+s], "|")
+                if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] then
+                    local subs = string.split(tt[4], ",")
+                    for i2, v in ipairs(subs) do
+                        if menu.options[tt[1]][tt[2]][tt[3]][5][1][i2] == nil then break end
+                        menu.options[tt[1]][tt[2]][tt[3]][5][1][i2] = tonumber(string.gsub(v, " ", ""))
+                        if i2 == #subs - 1 then break end
                     end
                 end
-            end
-            -- dropboxes
-            start, end_ = nil, nil
-            for i, v in next, lines do if v == "dropboxs {" then start = i break end end
-            for i, v in next, lines do if i > start and v == "}" then end_ = i break end end
-            if start and end_ then
-                for i = 1, end_ - start - 1 do
-                    local tt = string.split(lines[i+start], "|")
-                    if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] then
-                        local num = tonumber(tt[4])
-                        if num > #menu.options[tt[1]][tt[2]][tt[3]][6] then
-                            num = #menu.options[tt[1]][tt[2]][tt[3]][6]
-                        elseif num < 0 then num = 1 end
-                        menu.options[tt[1]][tt[2]][tt[3]][1] = num
+            end end
+
+            s, e = section("double colorpickers {")
+            if s and e then for i = 1, e - s - 1 do
+                local tt = string.split(lines[i+s], "|")
+                if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] then
+                    local subs = { string.split(tt[4], ","), string.split(tt[5], ",") }
+                    for i2, v in ipairs(subs) do
+                        for i3, v1 in ipairs(v) do
+                            if menu.options[tt[1]][tt[2]][tt[3]][5][1][i2][1][i3] == nil then break end
+                            menu.options[tt[1]][tt[2]][tt[3]][5][1][i2][1][i3] = tonumber(string.gsub(v1, " ", ""))
+                            if i3 == #v - 1 then break end
+                        end
                     end
                 end
-            end
-            -- textboxes
-            start, end_ = nil, nil
-            for i, v in next, lines do if v == "textboxs {" then start = i break end end
-            for i, v in next, lines do if i > start and v == "}" then end_ = i break end end
-            if start and end_ then
-                for i = 1, end_ - start - 1 do
-                    local tt = string.split(lines[i+start], "|")
-                    if menu.options[tt[1]] and menu.options[tt[1]][tt[2]] and menu.options[tt[1]][tt[2]][tt[3]] then
-                        menu.options[tt[1]][tt[2]][tt[3]][1] = tostring(tt[4])
-                    end
-                end
-            end
-            -- Refresh UI state
-            for k, v in pairs(menu.options) do
-                for k1, v1 in pairs(v) do
-                    for k2, v2 in pairs(v1) do
+            end end
+
+            for _, v in pairs(menu.options) do
+                for _, v1 in pairs(v) do
+                    for _, v2 in pairs(v1) do
                         if v2[2] == "toggle" then
-                            local on = v2[1]
                             for i = 0, 3 do
-                                v2[4][i+1].Color = ColorRange(i, on and {
+                                v2[4][i+1].Color = v2[1] and ColorRange(i, {
                                     [1] = {start=0, color=RGB(menu.mc[1], menu.mc[2], menu.mc[3])},
                                     [2] = {start=3, color=RGB(menu.mc[1]-40, menu.mc[2]-40, menu.mc[3]-40)},
-                                } or {
+                                }) or ColorRange(i, {
                                     [1] = {start=0, color=RGB(50,50,50)},
                                     [2] = {start=3, color=RGB(30,30,30)},
                                 })
@@ -1949,10 +1836,10 @@ function menu.Initialize(menutable)
                                         v2[5][4][i].Color = RGB(v2[5][1][1]-40, v2[5][1][2]-40, v2[5][1][3]-40)
                                     end
                                 elseif v2[5][2] == "double colorpicker" then
-                                    for i, v3 in ipairs(v2[5][1]) do
+                                    for _, v3 in ipairs(v2[5][1]) do
                                         v3[4][1].Color = RGB(v3[1][1], v3[1][2], v3[1][3])
-                                        for i1 = 2, 3 do
-                                            v3[4][i1].Color = RGB(v3[1][1]-40, v3[1][2]-40, v3[1][3]-40)
+                                        for i2 = 2, 3 do
+                                            v3[4][i2].Color = RGB(v3[1][1]-40, v3[1][2]-40, v3[1][3]-40)
                                         end
                                     end
                                 end
@@ -1983,25 +1870,26 @@ function menu.Initialize(menutable)
     end
 
     function menu.saveconfig()
-        local figgy = SaveCurSettings()
-        writefile("bitchbot/"..menu.game.."/"..menu.options["Settings"]["Configuration"]["ConfigName"][1]..".bb", figgy)
-        CreateNotification('Saved "'..menu.options["Settings"]["Configuration"]["ConfigName"][1]..'.bb"!')
+        local name = menu.options["Settings"]["Configuration"]["ConfigName"][1]
+        writefile(ConfigPath(name), SaveCurSettings())
+        CreateNotification('Saved "'..name..'.DS"!')
         UpdateConfigs()
     end
 
     function menu.loadconfig()
-        local configname = "bitchbot/"..menu.game.."/"..menu.options["Settings"]["Configuration"]["ConfigName"][1]..".bb"
-        if not isfile(configname) then
-            CreateNotification('"'..menu.options["Settings"]["Configuration"]["ConfigName"][1]..'.bb" is not a valid config.')
+        local name = menu.options["Settings"]["Configuration"]["ConfigName"][1]
+        local path = ConfigPath(name)
+        if not isfile(path) then
+            CreateNotification('"'..name..'.DS" is not a valid config.')
             return
         end
         local curcfg = SaveCurSettings()
-        local loadedcfg = readfile(configname)
-        if pcall(LoadConfig, loadedcfg) then
-            CreateNotification('Loaded "'..menu.options["Settings"]["Configuration"]["ConfigName"][1]..'.bb"!')
+        local loaded = readfile(path)
+        if pcall(LoadConfig, loaded) then
+            CreateNotification('Loaded "'..name..'.DS"!')
         else
             LoadConfig(curcfg)
-            CreateNotification('There was an issue loading "'..menu.options["Settings"]["Configuration"]["ConfigName"][1]..'.bb"')
+            CreateNotification('There was an issue loading "'..name..'.DS"')
         end
     end
 
@@ -2010,7 +1898,7 @@ function menu.Initialize(menutable)
             if buttonsInQue[bp] and tick() - buttonsInQue[bp] < doubleclickDelay then
                 buttonsInQue[bp] = 0
             else
-                for button, time in next, buttonsInQue do buttonsInQue[button] = 0 end
+                for button in next, buttonsInQue do buttonsInQue[button] = 0 end
                 buttonsInQue[bp] = tick()
                 return
             end
@@ -2019,15 +1907,16 @@ function menu.Initialize(menutable)
         if bp.callback then bp.callback() end
         if bp == menu.options["Settings"]["Cheat Settings"]["Unload Cheat"] then
             menu.fading = true
-            wait()
+            task.wait()
             menu:unload()
         elseif bp == menu.options["Settings"]["Cheat Settings"]["Set Clipboard Game ID"] then
             setclipboard(game.JobId)
         elseif bp == menu.options["Settings"]["Configuration"]["Save Config"] then
             menu.saveconfig()
         elseif bp == menu.options["Settings"]["Configuration"]["Delete Config"] then
-            delfile("bitchbot/"..menu.game.."/"..menu.options["Settings"]["Configuration"]["ConfigName"][1]..".bb")
-            CreateNotification('Deleted "'..menu.options["Settings"]["Configuration"]["ConfigName"][1]..'.bb"!')
+            local name = menu.options["Settings"]["Configuration"]["ConfigName"][1]
+            delfile(ConfigPath(name))
+            CreateNotification('Deleted "'..name..'.DS"!')
             UpdateConfigs()
         elseif bp == menu.options["Settings"]["Configuration"]["Load Config"] then
             menu.loadconfig()
@@ -2042,7 +1931,7 @@ function menu.Initialize(menutable)
                     local pass = true
                     for k3, v3 in pairs(menu.multigroups) do
                         if k == k3 then
-                            for k4, v4 in pairs(v3) do
+                            for _, v4 in pairs(v3) do
                                 for k5, v5 in pairs(v4.vals) do
                                     if k1 == k5 then pass = v5 end
                                 end
@@ -2050,12 +1939,13 @@ function menu.Initialize(menutable)
                         end
                     end
                     if pass then
-                        for k2, v2 in pairs(v1) do
+                        for _, v2 in pairs(v1) do
                             if v2[2] == "toggle" and v2[5] ~= nil and v2[5][2] == "keybind" then
                                 if menu:MouseInMenu(v2[5][3][1], v2[5][3][2], 44, 16) then
                                     if menu.keybind_open ~= v2 and v2[5].toggletype ~= 0 then
                                         menu.keybind_open = v2
-                                        set_modeselect(true, v2[5][3][1]+menu.x, v2[5][3][2]+16+menu.y, v2[5].toggletype)
+                                        set_modeselect(true, v2[5][3][1]+menu.x,
+                                            v2[5][3][2]+16+menu.y, v2[5].toggletype)
                                     else
                                         menu.keybind_open = nil
                                         set_modeselect(false, 20, 20, 1)
@@ -2075,23 +1965,23 @@ function menu.Initialize(menutable)
         set_modeselect(false, 20, 20, 1)
         if menu.keybind_open then
             local key = menu.keybind_open
-            local foundkey = false
+            local found = false
             for i = 1, 4 do
                 if menu:MouseInMenu(key[5][3][1], key[5][3][2]+16+((i-1)*21), 70, 21) then
-                    foundkey = true
+                    found = true
                     menu.keybind_open[5].toggletype = i
                     menu.keybind_open[5].relvalue = false
                 end
             end
             menu.keybind_open = nil
-            if foundkey then return end
+            if found then return end
         end
-        for k, v in pairs(menu.options) do
-            for k1, v1 in pairs(v) do
-                for k2, v2 in pairs(v1) do
+        for _, v in pairs(menu.options) do
+            for _, v1 in pairs(v) do
+                for _, v2 in pairs(v1) do
                     if v2[2] == "dropbox" and v2[5] then
                         if not menu:MouseInMenu(v2[3][1], v2[3][2], v2[3][3], 24*(#v2[6]+1)+3) then
-                            set_dropboxthingy(false, 400, 200, 160, 1, {"HI q","HI q","HI q"})
+                            set_dropboxthingy(false, 400, 200, 160, 1, {"q","q","q"})
                             v2[5] = false
                         else
                             menu.dropbox_open = v2
@@ -2099,33 +1989,26 @@ function menu.Initialize(menutable)
                     end
                     if v2[2] == "combobox" and v2[5] then
                         if not menu:MouseInMenu(v2[3][1], v2[3][2], v2[3][3], 24*(#v2[1]+1)+3) then
-                            set_dropboxthingy(false, 400, 200, 160, 1, {"HI q","HI q","HI q"})
+                            set_dropboxthingy(false, 400, 200, 160, 1, {"q","q","q"})
                             v2[5] = false
                         else
                             menu.dropbox_open = v2
                         end
                     end
                     if v2[2] == "toggle" and v2[5] ~= nil then
-                        if v2[5][2] == "keybind" then
-                            if v2[5][5] == true then
-                                v2[5][4][2].Color = RGB(30,30,30)
-                                v2[5][5] = false
-                            end
-                        elseif v2[5][2] == "single colorpicker" then
-                            if v2[5][5] == true then
-                                if not menu:MouseInColorPicker(0, 0, cp.w, cp.h) then
-                                    set_colorpicker(false, {255,0,0}, nil, false, "", 400, 200)
-                                    v2[5][5] = false
-                                    menu.colorpicker_open = nil
-                                end
+                        if v2[5][2] == "keybind" and v2[5][5] then
+                            v2[5][4][2].Color = RGB(30,30,30); v2[5][5] = false
+                        elseif v2[5][2] == "single colorpicker" and v2[5][5] then
+                            if not menu:MouseInColorPicker(0, 0, cp.w, cp.h) then
+                                set_colorpicker(false, {255,0,0}, nil, false, "", 400, 200)
+                                v2[5][5] = false; menu.colorpicker_open = nil
                             end
                         elseif v2[5][2] == "double colorpicker" then
-                            for k3, v3 in pairs(v2[5][1]) do
-                                if v3[5] == true then
+                            for _, v3 in pairs(v2[5][1]) do
+                                if v3[5] then
                                     if not menu:MouseInColorPicker(0, 0, cp.w, cp.h) then
                                         set_colorpicker(false, {255,0,0}, nil, false, "", 400, 200)
-                                        v3[5] = false
-                                        menu.colorpicker_open = nil
+                                        v3[5] = false; menu.colorpicker_open = nil
                                     end
                                 end
                             end
@@ -2161,15 +2044,12 @@ function menu.Initialize(menutable)
                 end
                 if cp.alpha then
                     menu.colorpicker_open[1] = {
-                        math.floor(tempclr.R*255),
-                        math.floor(tempclr.G*255),
-                        math.floor(tempclr.B*255),
-                        cp.hsv.a,
+                        math.floor(tempclr.R*255), math.floor(tempclr.G*255),
+                        math.floor(tempclr.B*255), cp.hsv.a,
                     }
                 else
                     menu.colorpicker_open[1] = {
-                        math.floor(tempclr.R*255),
-                        math.floor(tempclr.G*255),
+                        math.floor(tempclr.R*255), math.floor(tempclr.G*255),
                         math.floor(tempclr.B*255),
                     }
                 end
@@ -2183,15 +2063,11 @@ function menu.Initialize(menutable)
                 menu.colorpicker_open = nil
                 set_colorpicker(false, {255,0,0}, nil, false, "", 400, 200)
             end
-            if menu:MouseInColorPicker(10, 23, 160, 160) then
-                cp.dragging_m = true
-            elseif menu:MouseInColorPicker(176, 23, 14, 160) then
-                cp.dragging_r = true
-            elseif menu:MouseInColorPicker(10, 189, 160, 14) and cp.alpha then
-                cp.dragging_b = true
-            end
-            if menu:MouseInColorPicker(197, 37, 75, 20) then
-                menu.copied_clr = newcolor.Color
+            if menu:MouseInColorPicker(10, 23, 160, 160) then cp.dragging_m = true
+            elseif menu:MouseInColorPicker(176, 23, 14, 160) then cp.dragging_r = true
+            elseif menu:MouseInColorPicker(10, 189, 160, 14) and cp.alpha then cp.dragging_b = true end
+
+            if menu:MouseInColorPicker(197, 37, 75, 20) then menu.copied_clr = newcolor.Color
             elseif menu:MouseInColorPicker(197, 57, 75, 20) then
                 if menu.copied_clr ~= nil then
                     local cpa = false
@@ -2216,14 +2092,12 @@ function menu.Initialize(menutable)
         else
             for k, v in pairs(menu.multigroups) do
                 if menu.tabnames[menu.activetab] == k then
-                    for k1, v1 in pairs(v) do
+                    for _, v1 in pairs(v) do
                         local selected_pos = v1.drawn.barpos
-                        for k2, v2 in pairs(v1.drawn.click_pos) do
+                        for _, v2 in pairs(v1.drawn.click_pos) do
                             if menu:MouseInMenu(v2.x, v2.y, v2.width, v2.height) then
-                                for _k, _v in pairs(v1.vals) do
-                                    v1.vals[_k] = (_k == v2.name)
-                                end
-                                for _k, _v in pairs(v1.drawn.bar) do
+                                for _k, _v in pairs(v1.vals) do v1.vals[_k] = (_k == v2.name) end
+                                for _, _v in pairs(v1.drawn.bar) do
                                     menu.postable[_v.postable][2] = selected_pos[v2.num].pos
                                     _v.drawn.Size = Vector2.new(selected_pos[v2.num].length, 2)
                                 end
@@ -2238,14 +2112,14 @@ function menu.Initialize(menutable)
                     end
                 end
             end
-            local newdropbox_open
+            local newopen
             for k, v in pairs(menu.options) do
                 if menu.tabnames[menu.activetab] == k then
                     for k1, v1 in pairs(v) do
                         local pass = true
                         for k3, v3 in pairs(menu.multigroups) do
                             if k == k3 then
-                                for k4, v4 in pairs(v3) do
+                                for _, v4 in pairs(v3) do
                                     for k5, v5 in pairs(v4.vals) do
                                         if k1 == k5 then pass = v5 end
                                     end
@@ -2255,23 +2129,18 @@ function menu.Initialize(menutable)
                         if pass then
                             for k2, v2 in pairs(v1) do
                                 if v2[2] == "toggle" and not menu.dropbox_open then
-                                    if menu:MouseInMenu(v2[3][1], v2[3][2], 30 + v2[4][5].TextBounds.x, 16) then
+                                    if menu:MouseInMenu(v2[3][1], v2[3][2],
+                                        30 + v2[4][5].TextBounds.x, 16) then
                                         if v2[6] then
                                             if menu:GetVal("Settings", "Cheat Settings", "Allow Unsafe Features")
-                                                and v2[1] == false then
-                                                v2[1] = true
-                                            else
-                                                v2[1] = false
-                                            end
-                                        else
-                                            v2[1] = not v2[1]
-                                        end
-                                        local on = v2[1]
+                                               and v2[1] == false then v2[1] = true
+                                            else v2[1] = false end
+                                        else v2[1] = not v2[1] end
                                         for i = 0, 3 do
-                                            v2[4][i+1].Color = ColorRange(i, on and {
+                                            v2[4][i+1].Color = v2[1] and ColorRange(i, {
                                                 [1] = {start=0, color=RGB(menu.mc[1], menu.mc[2], menu.mc[3])},
                                                 [2] = {start=3, color=RGB(menu.mc[1]-40, menu.mc[2]-40, menu.mc[3]-40)},
-                                            } or {
+                                            }) or ColorRange(i, {
                                                 [1] = {start=0, color=RGB(50,50,50)},
                                                 [2] = {start=3, color=RGB(30,30,30)},
                                             })
@@ -2289,31 +2158,25 @@ function menu.Initialize(menutable)
                                                 v2[5][5] = true
                                                 menu.colorpicker_open = v2[5]
                                                 set_colorpicker(true, v2[5][1], v2[5],
-                                                    v2[5][1][4] ~= nil, v2[5][6],
-                                                    LOCAL_MOUSE.x, LOCAL_MOUSE.y + 36)
+                                                    v2[5][1][4] ~= nil, v2[5][6], mouseX, mouseY)
                                             end
                                         elseif v2[5][2] == "double colorpicker" then
-                                            for k3, v3 in pairs(v2[5][1]) do
+                                            for _, v3 in pairs(v2[5][1]) do
                                                 if menu:MouseInMenu(v3[3][1], v3[3][2], 28, 14) then
                                                     v3[5] = true
                                                     menu.colorpicker_open = v3
                                                     set_colorpicker(true, v3[1], v3,
-                                                        v3[1][4] ~= nil, v3[6],
-                                                        LOCAL_MOUSE.x, LOCAL_MOUSE.y + 36)
+                                                        v3[1][4] ~= nil, v3[6], mouseX, mouseY)
                                                 end
                                             end
                                         end
                                     end
                                 elseif v2[2] == "slider" and not menu.dropbox_open then
                                     if menu:MouseInMenu(v2[7][1], v2[7][2], 22, 13) then
-                                        local stepval = 1
-                                        if v2.stepsize then stepval = v2.stepsize end
+                                        local stepval = v2.stepsize or 1
                                         if menu:modkeydown("shift", "left") then stepval = 0.1 end
-                                        if menu:MouseInMenu(v2[7][1], v2[7][2], 11, 13) then
-                                            v2[1] -= stepval
-                                        elseif menu:MouseInMenu(v2[7][1]+11, v2[7][2], 11, 13) then
-                                            v2[1] += stepval
-                                        end
+                                        if menu:MouseInMenu(v2[7][1], v2[7][2], 11, 13) then v2[1] -= stepval
+                                        elseif menu:MouseInMenu(v2[7][1]+11, v2[7][2], 11, 13) then v2[1] += stepval end
                                         if v2[1] < v2[6][1] then v2[1] = v2[6][1]
                                         elseif v2[1] > v2[6][2] then v2[1] = v2[6][2] end
                                         local dp = v2.decimal and string.rep("0", math.log(1/v2.decimal)/math.log(10))
@@ -2334,49 +2197,41 @@ function menu.Initialize(menutable)
                                     if menu.dropbox_open and v2 ~= menu.dropbox_open then continue end
                                     if menu:MouseInMenu(v2[3][1], v2[3][2], v2[3][3], 36) then
                                         if not v2[5] then
-                                            set_dropboxthingy(true,
-                                                v2[3][1]+menu.x+1, v2[3][2]+menu.y+13,
+                                            set_dropboxthingy(true, v2[3][1]+menu.x+1, v2[3][2]+menu.y+13,
                                                 v2[3][3], v2[1], v2[6])
-                                            v2[5] = true
-                                            newdropbox_open = v2
+                                            v2[5] = true; newopen = v2
                                         else
-                                            set_dropboxthingy(false, 400, 200, 160, 1, {"HI q","HI q","HI q"})
-                                            v2[5] = false
-                                            newdropbox_open = nil
+                                            set_dropboxthingy(false, 400, 200, 160, 1, {"q","q","q"})
+                                            v2[5] = false; newopen = nil
                                         end
                                     elseif menu:MouseInMenu(v2[3][1], v2[3][2], v2[3][3],
                                         24*(#v2[6]+1)+3) and v2[5] then
                                         for i = 1, #v2[6] do
                                             if menu:MouseInMenu(v2[3][1], v2[3][2]+36+((i-1)*21),
                                                 v2[3][3], 21) then
-                                                v2[4][1].Text = v2[6][i]
-                                                v2[1] = i
-                                                set_dropboxthingy(false, 400, 200, 160, 1, {"HI q","HI q","HI q"})
-                                                v2[5] = false
-                                                newdropbox_open = nil
+                                                v2[4][1].Text = v2[6][i]; v2[1] = i
+                                                set_dropboxthingy(false, 400, 200, 160, 1, {"q","q","q"})
+                                                v2[5] = false; newopen = nil
                                                 if v2.callback then v2.callback(v2[1]) end
                                             end
                                         end
                                         if v2 == menu.options["Settings"]["Configuration"]["Configs"] then
-                                            local textbox = menu.options["Settings"]["Configuration"]["ConfigName"]
-                                            local relconfigs = GetConfigs()
-                                            textbox[1] = relconfigs[menu.options["Settings"]["Configuration"]["Configs"][1]]
-                                            textbox[4].Text = textbox[1]
+                                            local tb = menu.options["Settings"]["Configuration"]["ConfigName"]
+                                            local rel = GetConfigs()
+                                            tb[1] = rel[menu.options["Settings"]["Configuration"]["Configs"][1]]
+                                            tb[4].Text = tb[1]
                                         end
                                     end
                                 elseif v2[2] == "combobox" then
                                     if menu.dropbox_open and v2 ~= menu.dropbox_open then continue end
                                     if menu:MouseInMenu(v2[3][1], v2[3][2], v2[3][3], 36) then
                                         if not v2[5] then
-                                            set_comboboxthingy(true,
-                                                v2[3][1]+menu.x+1, v2[3][2]+menu.y+13,
-                                                v2[3][3], v2[1])
-                                            v2[5] = true
-                                            newdropbox_open = v2
+                                            set_comboboxthingy(true, v2[3][1]+menu.x+1,
+                                                v2[3][2]+menu.y+13, v2[3][3], v2[1])
+                                            v2[5] = true; newopen = v2
                                         else
-                                            set_dropboxthingy(false, 400, 200, 160, 1, {"HI q","HI q","HI q"})
-                                            v2[5] = false
-                                            newdropbox_open = nil
+                                            set_dropboxthingy(false, 400, 200, 160, 1, {"q","q","q"})
+                                            v2[5] = false; newopen = nil
                                         end
                                     elseif menu:MouseInMenu(v2[3][1], v2[3][2], v2[3][3],
                                         24*(#v2[1]+1)+3) and v2[5] then
@@ -2384,27 +2239,22 @@ function menu.Initialize(menutable)
                                             if menu:MouseInMenu(v2[3][1], v2[3][2]+36+((i-1)*22),
                                                 v2[3][3], 23) then
                                                 v2[1][i][2] = not v2[1][i][2]
-                                                local textthing = ""
-                                                for k, v in pairs(v2[1]) do
-                                                    if v[2] then
-                                                        if textthing == "" then textthing = v[1]
-                                                        else textthing = textthing..", "..v[1] end
+                                                local tt = ""
+                                                for _, vv in pairs(v2[1]) do
+                                                    if vv[2] then
+                                                        if tt == "" then tt = vv[1]
+                                                        else tt = tt..", "..vv[1] end
                                                     end
                                                 end
-                                                textthing = textthing ~= "" and textthing or "None"
-                                                if string.len(textthing) > 25 then
-                                                    textthing = string_cut(textthing, 25)
-                                                end
-                                                v2[4][1].Text = textthing
-                                                set_comboboxthingy(true,
-                                                    v2[3][1]+menu.x+1, v2[3][2]+menu.y+13,
-                                                    v2[3][3], v2[1])
+                                                tt = tt ~= "" and tt or "None"
+                                                if string.len(tt) > 25 then tt = string_cut(tt, 25) end
+                                                v2[4][1].Text = tt
+                                                set_comboboxthingy(true, v2[3][1]+menu.x+1,
+                                                    v2[3][2]+menu.y+13, v2[3][3], v2[1])
                                                 if v2.callback then
-                                                    local selected = {}
-                                                    for idx, item in ipairs(v2[1]) do
-                                                        selected[idx] = item[2]
-                                                    end
-                                                    v2.callback(selected)
+                                                    local sel = {}
+                                                    for idx, item in ipairs(v2[1]) do sel[idx] = item[2] end
+                                                    v2.callback(sel)
                                                 end
                                             end
                                         end
@@ -2437,12 +2287,11 @@ function menu.Initialize(menutable)
                     end
                 end
             end
-            menu.dropbox_open = newdropbox_open
+            menu.dropbox_open = newopen
         end
-        -- Safety: turn off unsafe if not allowed
-        for k, v in pairs(menu.options) do
-            for k1, v1 in pairs(v) do
-                for k2, v2 in pairs(v1) do
+        for _, v in pairs(menu.options) do
+            for _, v1 in pairs(v) do
+                for _, v2 in pairs(v1) do
                     if v2[2] == "toggle" and v2[6] then
                         if not menu:GetVal("Settings", "Cheat Settings", "Allow Unsafe Features") then
                             v2[1] = false
@@ -2459,26 +2308,24 @@ function menu.Initialize(menutable)
         end
         if menu.open then
             if menu.options["Settings"]["Cheat Settings"]["Menu Accent"][1] then
-                local clr = menu.options["Settings"]["Cheat Settings"]["Menu Accent"][5][1]
-                menu.mc = { clr[1], clr[2], clr[3] }
+                local c = menu.options["Settings"]["Cheat Settings"]["Menu Accent"][5][1]
+                menu.mc = { c[1], c[2], c[3] }
             else
                 menu.mc = { 127, 72, 163 }
             end
             menu:set_menu_clr(menu.mc[1], menu.mc[2], menu.mc[3])
             local wme = menu:GetVal("Settings", "Cheat Settings", "Watermark")
-            for k, v in pairs(menu.watermark.rect) do v.Visible = wme end
+            for _, v in pairs(menu.watermark.rect) do v.Visible = wme end
             menu.watermark.text[1].Visible = wme
         end
     end
 
     local function mousebutton1upfunc()
-        cp.dragging_m = false
-        cp.dragging_r = false
-        cp.dragging_b = false
+        cp.dragging_m = false; cp.dragging_r = false; cp.dragging_b = false
         for k, v in pairs(menu.options) do
             if menu.tabnames[menu.activetab] == k then
-                for k1, v1 in pairs(v) do
-                    for k2, v2 in pairs(v1) do
+                for _, v1 in pairs(v) do
+                    for _, v2 in pairs(v1) do
                         if v2[2] == "slider" and v2[5] then v2[5] = false end
                         if v2[2] == "button" and v2[1] then
                             for i = 0, 8 do
@@ -2497,49 +2344,45 @@ function menu.Initialize(menutable)
 
     local clickspot_x, clickspot_y, original_menu_x, original_menu_y = 0, 0, 0, 0
 
-    menu.connections.mwf = LOCAL_MOUSE.WheelForward:Connect(function()
-        if menu.open then
-            for k, v in pairs(menu.options) do
-                if menu.tabnames[menu.activetab] == k then
-                    for k1, v1 in pairs(v) do
-                        for k2, v2 in pairs(v1) do
-                            if v2[2] == "list" and v2[3] > 1 then v2[3] -= 1 end
-                        end
+    menu.connections.mwf = game:GetService("Players").LocalPlayer:GetMouse().WheelForward:Connect(function()
+        if not menu.open then return end
+        for k, v in pairs(menu.options) do
+            if menu.tabnames[menu.activetab] == k then
+                for _, v1 in pairs(v) do
+                    for _, v2 in pairs(v1) do
+                        if v2[2] == "list" and v2[3] > 1 then v2[3] -= 1 end
                     end
                 end
             end
         end
     end)
-    menu.connections.mwb = LOCAL_MOUSE.WheelBackward:Connect(function()
-        if menu.open then
-            for k, v in pairs(menu.options) do
-                if menu.tabnames[menu.activetab] == k then
-                    for k1, v1 in pairs(v) do
-                        for k2, v2 in pairs(v1) do
-                            if v2[2] == "list" and v2[5][v2[3]+v2[6]] ~= nil then v2[3] += 1 end
-                        end
+    menu.connections.mwb = game:GetService("Players").LocalPlayer:GetMouse().WheelBackward:Connect(function()
+        if not menu.open then return end
+        for k, v in pairs(menu.options) do
+            if menu.tabnames[menu.activetab] == k then
+                for _, v1 in pairs(v) do
+                    for _, v2 in pairs(v1) do
+                        if v2[2] == "list" and v2[5][v2[3]+v2[6]] ~= nil then v2[3] += 1 end
                     end
                 end
             end
         end
     end)
 
-    function menu:set_menu_alphaparency(transparency)
-        for k, v in pairs(bbmenu) do v.Transparency = transparency / 255 end
-        for k, v in pairs(tabz[menu.activetab]) do v.Transparency = transparency / 255 end
+    function menu:set_menu_alphaparency(t)
+        for _, v in pairs(bbmenu) do v.Transparency = t / 255 end
+        for _, v in pairs(tabz[menu.activetab]) do v.Transparency = t / 255 end
     end
 
     function menu:set_menu_visibility(visible)
-        for k, v in pairs(bbmenu) do v.Visible = visible end
-        for k, v in pairs(tabz[menu.activetab]) do v.Visible = visible end
+        for _, v in pairs(bbmenu) do v.Visible = visible end
+        for _, v in pairs(tabz[menu.activetab]) do v.Visible = visible end
         if visible then
             for k, v in pairs(menu.multigroups) do
                 if menu.tabnames[menu.activetab] == k then
-                    for k1, v1 in pairs(v) do
+                    for _, v1 in pairs(v) do
                         for k2, v2 in pairs(v1.vals) do
-                            for k3, v3 in pairs(menu.mgrouptabz[k][k2]) do
-                                v3.Visible = v2
-                            end
+                            for _, v3 in pairs(menu.mgrouptabz[k][k2]) do v3.Visible = v2 end
                         end
                     end
                 end
@@ -2549,18 +2392,13 @@ function menu.Initialize(menutable)
 
     menu:set_menu_alphaparency(0)
     menu:set_menu_visibility(false)
-    menu.lastActive = true
     menu.open = false
-    menu.windowactive = true
 
-    local function renderSteppedMenu(fdt)
-        menu.dt = fdt
+    local function renderSteppedMenu(dt)
         if menu.unloaded then return end
-        SCREEN_SIZE = Camera.ViewportSize
-        if menu.lastActive ~= menu.windowactive then
-            setfpscap(menu.windowactive and 144 or 15)
-        end
-        menu.lastActive = menu.windowactive
+
+        RefreshMouse()
+        SCREEN_SIZE = workspace.CurrentCamera.ViewportSize
 
         for button, time in next, buttonsInQue do
             if time and tick() - time < doubleclickDelay then
@@ -2572,16 +2410,14 @@ function menu.Initialize(menutable)
             end
         end
 
-        if menu.open then
-            if menu.backspaceheld then
-                local dt = tick() - menu.backspacetime
-                if dt > 0.4 then
-                    menu.backspaceflags += 1
-                    if menu.backspaceflags % 5 == 0 then
-                        local textbox = menu.textboxopen
-                        textbox[1] = string.sub(textbox[1], 0, #textbox[1] - 1)
-                        textbox[4].Text = textbox[1] .. "|"
-                    end
+        if menu.open and menu.backspaceheld then
+            local dt2 = tick() - menu.backspacetime
+            if dt2 > 0.4 then
+                menu.backspaceflags += 1
+                if menu.backspaceflags % 5 == 0 then
+                    local tb = menu.textboxopen
+                    tb[1] = string.sub(tb[1], 0, #tb[1] - 1)
+                    tb[4].Text = tb[1] .. "|"
                 end
             end
         end
@@ -2617,7 +2453,7 @@ function menu.Initialize(menutable)
             end
         end
 
-        set_tooltip(nil, nil, nil, false, fdt)
+        set_tooltip(nil, nil, nil, false, dt)
 
         if menu.open or menu.fading then
             set_plusminus(0, 20, 20)
@@ -2627,7 +2463,7 @@ function menu.Initialize(menutable)
                         local pass = true
                         for k3, v3 in pairs(menu.multigroups) do
                             if k == k3 then
-                                for k4, v4 in pairs(v3) do
+                                for _, v4 in pairs(v3) do
                                     for k5, v5 in pairs(v4.vals) do
                                         if k1 == k5 then pass = v5 end
                                     end
@@ -2635,21 +2471,21 @@ function menu.Initialize(menutable)
                             end
                         end
                         if pass then
-                            for k2, v2 in pairs(v1) do
+                            for _, v2 in pairs(v1) do
                                 if v2[2] == "toggle" then
                                     if not menu.dropbox_open and not menu.colorpicker_open then
                                         if menu.open and menu:MouseInMenu(v2[3][1], v2[3][2],
                                             30 + v2[4][5].TextBounds.x, 16) then
                                             if v2.tooltip then
                                                 set_tooltip(menu.x + v2[3][1], menu.y + v2[3][2] + 18,
-                                                    v2.tooltip, true, fdt * 2)
+                                                    v2.tooltip, true, dt * 2)
                                             end
                                         end
                                     end
                                 elseif v2[2] == "slider" then
                                     if v2[5] then
-                                        local new_val = (v2[6][2] - v2[6][1]) * (
-                                            (LOCAL_MOUSE.x - menu.x - v2[3][1]) / v2[3][3])
+                                        local new_val = (v2[6][2] - v2[6][1]) *
+                                            ((mouseX - menu.x - v2[3][1]) / v2[3][3])
                                         v2[1] = ((not v2.decimal) and math.floor(new_val)
                                             or math.floor(new_val / v2.decimal) * v2.decimal) + v2[6][1]
                                         if v2[1] < v2[6][1] then v2[1] = v2[6][1]
@@ -2682,42 +2518,37 @@ function menu.Initialize(menutable)
                                         end
                                     end
                                 elseif v2[2] == "list" then
-                                    for k3, v3 in pairs(v2[4].liststuff) do
-                                        for i, v4 in ipairs(v3) do
-                                            for i1, v5 in ipairs(v4) do
-                                                v5.Visible = false
-                                            end
+                                    for _, v3 in pairs(v2[4].liststuff) do
+                                        for _, v4 in ipairs(v3) do
+                                            for _, v5 in ipairs(v4) do v5.Visible = false end
                                         end
                                     end
                                     for i = 1, v2[6] do
                                         if v2[5][i + v2[3] - 1] ~= nil then
                                             for i1 = 1, v2[7] do
-                                                v2[4].liststuff.words[i][i1].Text = v2[5][i + v2[3] - 1][i1][1]
+                                                local entry = v2[5][i + v2[3] - 1][i1]
+                                                v2[4].liststuff.words[i][i1].Text = entry[1]
                                                 v2[4].liststuff.words[i][i1].Visible = true
-                                                if v2[5][i + v2[3] - 1][i1][1] == v2[1] and i1 == 1 then
-                                                    if menu.options["Settings"]["Cheat Settings"]["Menu Accent"][1] then
-                                                        local clr = menu.options["Settings"]["Cheat Settings"]["Menu Accent"][5][1]
-                                                        v2[4].liststuff.words[i][i1].Color = RGB(clr[1], clr[2], clr[3])
-                                                    else
-                                                        v2[4].liststuff.words[i][i1].Color = RGB(menu.mc[1], menu.mc[2], menu.mc[3])
-                                                    end
+                                                if entry[1] == v2[1] and i1 == 1 then
+                                                    local clr = menu.options["Settings"]["Cheat Settings"]["Menu Accent"][1]
+                                                        and menu.options["Settings"]["Cheat Settings"]["Menu Accent"][5][1]
+                                                        or menu.mc
+                                                    v2[4].liststuff.words[i][i1].Color = RGB(clr[1], clr[2], clr[3])
                                                 else
-                                                    v2[4].liststuff.words[i][i1].Color = v2[5][i + v2[3] - 1][i1][2]
+                                                    v2[4].liststuff.words[i][i1].Color = entry[2]
                                                 end
                                             end
-                                            for k3, v3 in pairs(v2[4].liststuff.rows[i]) do
-                                                v3.Visible = true
-                                            end
+                                            for _, v3 in pairs(v2[4].liststuff.rows[i]) do v3.Visible = true end
                                         elseif v2[3] > 1 then
                                             v2[3] -= 1
                                         end
                                     end
                                     if v2[3] == 1 then
-                                        for k3, v3 in pairs(v2[4].uparrow) do
+                                        for _, v3 in pairs(v2[4].uparrow) do
                                             if v3.Visible then v3.Visible = false end
                                         end
                                     else
-                                        for k3, v3 in pairs(v2[4].uparrow) do
+                                        for _, v3 in pairs(v2[4].uparrow) do
                                             if not v3.Visible then
                                                 v3.Visible = true
                                                 menu:SetMenuPos(menu.x, menu.y)
@@ -2725,11 +2556,11 @@ function menu.Initialize(menutable)
                                         end
                                     end
                                     if v2[5][v2[3]+v2[6]] == nil then
-                                        for k3, v3 in pairs(v2[4].downarrow) do
+                                        for _, v3 in pairs(v2[4].downarrow) do
                                             if v3.Visible then v3.Visible = false end
                                         end
                                     else
-                                        for k3, v3 in pairs(v2[4].downarrow) do
+                                        for _, v3 in pairs(v2[4].downarrow) do
                                             if not v3.Visible then
                                                 v3.Visible = true
                                                 menu:SetMenuPos(menu.x, menu.y)
@@ -2743,22 +2574,23 @@ function menu.Initialize(menutable)
                 end
             end
 
-            menu.inmenu = LOCAL_MOUSE.x > menu.x and LOCAL_MOUSE.x < menu.x + menu.w
-                and LOCAL_MOUSE.y > menu.y - 32 and LOCAL_MOUSE.y < menu.y + menu.h
-            menu.inmiddlemenu = LOCAL_MOUSE.x > menu.x + 9 and LOCAL_MOUSE.x < menu.x + menu.w - 9
-                and LOCAL_MOUSE.y > menu.y - 9 and LOCAL_MOUSE.y < menu.y + menu.h - 47
+            -- Draggable: whole menu rectangle minus the inner content area
+            menu.inmenu = mouseX > menu.x and mouseX < menu.x + menu.w
+                and mouseY > menu.y and mouseY < menu.y + menu.h
+            menu.inmiddlemenu = mouseX > menu.x + 10 and mouseX < menu.x + menu.w - 10
+                and mouseY > menu.y + 59 and mouseY < menu.y + menu.h - 10
 
             if ((menu.inmenu and not menu.inmiddlemenu) or menu.dragging) and not menu.dontdrag then
                 if menu.mousedown then
                     if not menu.dragging then
-                        clickspot_x = LOCAL_MOUSE.x
-                        clickspot_y = LOCAL_MOUSE.y - 36
+                        clickspot_x = mouseX
+                        clickspot_y = mouseY
                         original_menu_x = menu.x
                         original_menu_y = menu.y
                         menu.dragging = true
                     end
-                    menu.x = (original_menu_x - clickspot_x) + LOCAL_MOUSE.x
-                    menu.y = (original_menu_y - clickspot_y) + LOCAL_MOUSE.y - 36
+                    menu.x = (original_menu_x - clickspot_x) + mouseX
+                    menu.y = (original_menu_y - clickspot_y) + mouseY
                     if menu.y < 0 then menu.y = 0 end
                     if menu.x < -menu.w/4*3 then menu.x = -menu.w/4*3 end
                     if menu.x + menu.w/4 > SCREEN_SIZE.x then menu.x = SCREEN_SIZE.x - menu.w/4 end
@@ -2775,27 +2607,26 @@ function menu.Initialize(menutable)
 
             if menu.colorpicker_open then
                 if cp.dragging_m then
-                    set_dragbar_m(
-                        clamp(LOCAL_MOUSE.x, cp.x+12, cp.x+167) - 2,
-                        clamp(LOCAL_MOUSE.y+36, cp.y+25, cp.y+180) - 2)
-                    cp.hsv.s = (clamp(LOCAL_MOUSE.x, cp.x+12, cp.x+167) - cp.x - 12) / 155
-                    cp.hsv.v = 1 - ((clamp(LOCAL_MOUSE.y+36, cp.y+23, cp.y+178) - cp.y - 23) / 155)
+                    set_dragbar_m(clamp(mouseX, cp.x+12, cp.x+167) - 2,
+                                  clamp(mouseY, cp.y+25, cp.y+180) - 2)
+                    cp.hsv.s = (clamp(mouseX, cp.x+12, cp.x+167) - cp.x - 12) / 155
+                    cp.hsv.v = 1 - ((clamp(mouseY, cp.y+23, cp.y+178) - cp.y - 23) / 155)
                     newcolor.Color = Color3.fromHSV(cp.hsv.h, cp.hsv.s, cp.hsv.v)
                 elseif cp.dragging_r then
-                    set_dragbar_r(cp.x+175, clamp(LOCAL_MOUSE.y+36, cp.y+23, cp.y+178))
+                    set_dragbar_r(cp.x+175, clamp(mouseY, cp.y+23, cp.y+178))
                     maincolor.Color = Color3.fromHSV(
-                        1 - ((clamp(LOCAL_MOUSE.y+36, cp.y+23, cp.y+178) - cp.y - 23) / 155), 1, 1)
-                    cp.hsv.h = 1 - ((clamp(LOCAL_MOUSE.y+36, cp.y+23, cp.y+178) - cp.y - 23) / 155)
+                        1 - ((clamp(mouseY, cp.y+23, cp.y+178) - cp.y - 23) / 155), 1, 1)
+                    cp.hsv.h = 1 - ((clamp(mouseY, cp.y+23, cp.y+178) - cp.y - 23) / 155)
                     newcolor.Color = Color3.fromHSV(cp.hsv.h, cp.hsv.s, cp.hsv.v)
                 elseif cp.dragging_b then
-                    set_dragbar_b(clamp(LOCAL_MOUSE.x, cp.x+10, cp.x+168), cp.y+188)
-                    newcolor.Transparency = (clamp(LOCAL_MOUSE.x, cp.x+10, cp.x+168) - cp.x - 10) / 158
-                    cp.hsv.a = math.floor(((clamp(LOCAL_MOUSE.x, cp.x+10, cp.x+168) - cp.x - 10) / 158) * 255)
+                    set_dragbar_b(clamp(mouseX, cp.x+10, cp.x+168), cp.y+188)
+                    newcolor.Transparency = (clamp(mouseX, cp.x+10, cp.x+168) - cp.x - 10) / 158
+                    cp.hsv.a = math.floor(((clamp(mouseX, cp.x+10, cp.x+168) - cp.x - 10) / 158) * 255)
                 else
                     local setvisnew = menu:MouseInColorPicker(197, 37, 75, 40)
-                    for i, v in ipairs(newcopy) do v.Visible = setvisnew end
+                    for _, v in ipairs(newcopy) do v.Visible = setvisnew end
                     local setvisold = menu:MouseInColorPicker(197, 91, 75, 40)
-                    for i, v in ipairs(oldcopy) do v.Visible = setvisold end
+                    for _, v in ipairs(oldcopy) do v.Visible = setvisold end
                 end
             end
         else
@@ -2813,29 +2644,14 @@ function menu.Initialize(menutable)
         end
         if input.UserInputType == Enum.UserInputType.Keyboard then
             if input.KeyCode.Name:match("Shift") then
-                local kcn = input.KeyCode.Name
-                local direction = kcn:split("Shift")[1]
-                menu.modkeys.shift.direction = direction:lower()
+                menu.modkeys.shift.direction = input.KeyCode.Name:split("Shift")[1]:lower()
             end
             if input.KeyCode.Name:match("Alt") then
-                local kcn = input.KeyCode.Name
-                local direction = kcn:split("Alt")[1]
-                menu.modkeys.alt.direction = direction:lower()
+                menu.modkeys.alt.direction = input.KeyCode.Name:split("Alt")[1]:lower()
             end
         end
         menu:InputBeganMenu(input)
         menu:InputBeganKeybinds(input)
-        if menu.open then
-            if menu.tabnames[menu.activetab] == "Settings" then
-                bbmenu[27].Text = menu.title
-                menu.watermark.text[1].Text = menu.title .. menu.watermark.textString
-                for i, v in ipairs(menu.watermark.rect) do
-                    local len = #menu.watermark.text[1].Text * 7 + 10
-                    if i == #menu.watermark.rect then len += 2 end
-                    v.Size = Vector2.new(len, v.Size.y)
-                end
-            end
-        end
     end)
 
     menu.connections.inputended = INPUT_SERVICE.InputEnded:Connect(function(input)
@@ -2845,12 +2661,8 @@ function menu.Initialize(menutable)
             if menu.open and not menu.fading then mousebutton1upfunc() end
         end
         if input.UserInputType == Enum.UserInputType.Keyboard then
-            if input.KeyCode.Name:match("Shift") then
-                menu.modkeys.shift.direction = nil
-            end
-            if input.KeyCode.Name:match("Alt") then
-                menu.modkeys.alt.direction = nil
-            end
+            if input.KeyCode.Name:match("Shift") then menu.modkeys.shift.direction = nil end
+            if input.KeyCode.Name:match("Alt") then menu.modkeys.alt.direction = nil end
         end
     end)
 
@@ -2860,11 +2672,7 @@ function menu.Initialize(menutable)
         getgenv().v2 = nil
         self.unloaded = true
         for k, conn in next, self.connections do
-            if not getrawmetatable(conn) then
-                conn()
-            else
-                conn:Disconnect()
-            end
+            if not getrawmetatable(conn) then conn() else conn:Disconnect() end
             self.connections[k] = nil
         end
         game:GetService("ContextActionService"):UnbindAction("BB Keycheck")
@@ -2876,15 +2684,12 @@ function menu.Initialize(menutable)
     end
 end
 
--- Placeholder for loading text
-local loadingthing = Draw:OutlinedText("Loading...", 2, true,
-    math.floor(SCREEN_SIZE.x/16), math.floor(SCREEN_SIZE.y/16),
-    13, true, {255,50,200,255}, {0,0,0})
-
+-- =========================================================================
 -- Keycheck
+-- =========================================================================
 local function keycheck(actionName, inputState, inputObject)
     if actionName ~= "BB Keycheck" then return Enum.ContextActionResult.Pass end
-    if menu.open and menu.textboxopen then
+    if menu and menu.open and menu.textboxopen then
         if inputObject.KeyCode == Enum.KeyCode.Backspace then
             if menu.selectall then
                 menu.textboxopen[1] = ""
@@ -2898,21 +2703,18 @@ local function keycheck(actionName, inputState, inputObject)
             if not on then menu.backspaceflags = 0 end
         end
         if inputObject.KeyCode ~= Enum.KeyCode.A
-            and (not inputObject.KeyCode.Name:match("^Left")
-            and not inputObject.KeyCode.Name:match("^Right"))
-            and inputObject.KeyCode ~= Enum.KeyCode.RightShift then
+           and (not inputObject.KeyCode.Name:match("^Left") and not inputObject.KeyCode.Name:match("^Right"))
+           and inputObject.KeyCode ~= Enum.KeyCode.RightShift then
             if menu.selectall then
                 menu.textboxopen[4].Color = RGB(unpack(menu.mc))
                 menu.selectall = false
             end
         end
-        if inputObject.KeyCode == Enum.KeyCode.A then
-            if inputState == Enum.UserInputState.Begin
-                and INPUT_SERVICE:IsKeyDown(Enum.KeyCode.LeftControl) then
-                menu.selectall = true
-                local textbox = menu.textboxopen
-                textbox[4].Color = RGB(menu.mc[3], menu.mc[2], menu.mc[1])
-            end
+        if inputObject.KeyCode == Enum.KeyCode.A
+           and inputState == Enum.UserInputState.Begin
+           and INPUT_SERVICE:IsKeyDown(Enum.KeyCode.LeftControl) then
+            menu.selectall = true
+            menu.textboxopen[4].Color = RGB(menu.mc[3], menu.mc[2], menu.mc[1])
         end
         return Enum.ContextActionResult.Sink
     end
@@ -2920,30 +2722,10 @@ local function keycheck(actionName, inputState, inputObject)
 end
 game:GetService("ContextActionService"):BindAction("BB Keycheck", keycheck, false, Enum.UserInputType.Keyboard)
 
--- =========================================================
+-- =========================================================================
 -- PUBLIC API
--- =========================================================
-local function make_extra(opts)
-    if not opts then return nil end
-    if opts.Keybind then
-        return { type = "keybind", key = opts.Keybind,
-                 toggletype = opts.ToggleType, callback = opts.Callback }
-    end
-    if opts.Color then
-        return { type = "single colorpicker",
-                 name = opts.ColorName or (opts.Name or "Color"),
-                 color = opts.Color, callback = opts.Callback }
-    end
-    if opts.Colors then
-        return { type = "double colorpicker",
-                 name = opts.ColorNames or { "Color 1", "Color 2" },
-                 color = opts.Colors, callback = opts.Callback }
-    end
-    return nil
-end
-
-local TabMT   = {}
-local GroupMT = {}
+-- =========================================================================
+local TabMT, GroupMT = {}, {}
 
 function TabMT:CreateGroup(name, side, opts)
     opts = opts or {}
@@ -2958,11 +2740,29 @@ function TabMT:CreateGroup(name, side, opts)
     return setmetatable(group, { __index = GroupMT })
 end
 
+local function make_extra(opts, name)
+    if not opts then return nil end
+    if opts.Keybind then
+        return { type = "keybind", key = opts.Keybind,
+                 toggletype = opts.ToggleType, callback = opts.Callback }
+    end
+    if opts.Colors then
+        return { type = "double colorpicker",
+                 name = opts.ColorNames or { name.." 1", name.." 2" },
+                 color = opts.Colors, callback = opts.Callback }
+    end
+    if opts.Color then
+        return { type = "single colorpicker",
+                 name = opts.ColorName or (name.." Color"),
+                 color = opts.Color, callback = opts.Callback }
+    end
+    return nil
+end
+
 function GroupMT:CreateToggle(name, default, opts)
     opts = opts or {}
     local el = {
-        type = "toggle",
-        name = name,
+        type = "toggle", name = name,
         value = default or false,
         callback = opts.Callback,
         unsafe = opts.Unsafe,
@@ -2972,129 +2772,102 @@ function GroupMT:CreateToggle(name, default, opts)
         Keybind = opts.Keybind, ToggleType = opts.ToggleType,
         Color = opts.Color, ColorName = opts.ColorName,
         Colors = opts.Colors, ColorNames = opts.ColorNames,
-        Callback = opts.Callback, Name = name,
-    })
+        Callback = opts.Callback,
+    }, name)
     table.insert(self.elements, el)
     return el
 end
 
 function GroupMT:CreateSlider(name, minv, maxv, default, opts)
     opts = opts or {}
-    local el = {
-        type = "slider",
-        name = name,
+    table.insert(self.elements, {
+        type = "slider", name = name,
         value = default or minv,
-        minvalue = minv,
-        maxvalue = maxv,
+        minvalue = minv, maxvalue = maxv,
         stradd = opts.Suffix,
         decimal = opts.Decimal,
         stepsize = opts.Step,
         custom = opts.Custom or {},
         callback = opts.Callback,
         tooltip = opts.Tooltip,
-    }
-    table.insert(self.elements, el)
-    return el
+    })
 end
 
 function GroupMT:CreateDropbox(name, values, default, opts)
     opts = opts or {}
-    local el = {
-        type = "dropbox",
-        name = name,
+    table.insert(self.elements, {
+        type = "dropbox", name = name,
         value = default or 1,
         values = values,
         callback = opts.Callback,
         tooltip = opts.Tooltip,
-    }
-    table.insert(self.elements, el)
-    return el
+    })
 end
 
 function GroupMT:CreateCombobox(name, values, opts)
     opts = opts or {}
-    local el = {
-        type = "combobox",
-        name = name,
+    table.insert(self.elements, {
+        type = "combobox", name = name,
         values = values,
         callback = opts.Callback,
         tooltip = opts.Tooltip,
-    }
-    table.insert(self.elements, el)
-    return el
+    })
 end
 
 function GroupMT:CreateButton(name, callback, opts)
     opts = opts or {}
-    local el = {
-        type = "button",
-        name = name,
+    table.insert(self.elements, {
+        type = "button", name = name,
         callback = callback,
         doubleclick = opts.DoubleClick,
         tooltip = opts.Tooltip,
-    }
-    table.insert(self.elements, el)
-    return el
+    })
 end
 
 function GroupMT:CreateTextbox(name, default, callback, opts)
     opts = opts or {}
-    local el = {
-        type = "textbox",
-        name = name,
+    table.insert(self.elements, {
+        type = "textbox", name = name,
         text = default or "",
         callback = callback,
         file = opts.File,
         tooltip = opts.Tooltip,
-    }
-    table.insert(self.elements, el)
-    return el
+    })
 end
 
 function GroupMT:CreateKeybind(name, key, callback, opts)
     opts = opts or {}
-    local el = {
-        type = "toggle",
-        name = name,
-        value = false,
-        callback = opts.OnToggle or opts.Callback,
+    table.insert(self.elements, {
+        type = "toggle", name = name, value = false,
+        callback = opts.OnToggle,
         tooltip = opts.Tooltip,
         extra = {
-            type = "keybind",
-            key = key,
+            type = "keybind", key = key,
             toggletype = opts.ToggleType or 2,
             callback = callback or opts.Callback,
         },
-    }
-    table.insert(self.elements, el)
-    return el
+    })
 end
 
 function GroupMT:CreateColorPicker(name, color, callback, opts)
     opts = opts or {}
-    local el = {
-        type = "toggle",
-        name = name,
-        value = false,
+    table.insert(self.elements, {
+        type = "toggle", name = name, value = false,
         callback = opts.OnToggle,
         tooltip = opts.Tooltip,
         extra = {
             type = "single colorpicker",
-            name = opts.ColorName or (name .. " Color"),
+            name = opts.ColorName or (name.." Color"),
             color = color,
             callback = callback,
         },
-    }
-    table.insert(self.elements, el)
-    return el
+    })
 end
 
 function GroupMT:CreateDoubleColorPicker(name, colors, callback, opts)
     opts = opts or {}
-    local el = {
-        type = "toggle",
-        name = name,
-        value = false,
+    table.insert(self.elements, {
+        type = "toggle", name = name, value = false,
         callback = opts.OnToggle,
         tooltip = opts.Tooltip,
         extra = {
@@ -3103,37 +2876,122 @@ function GroupMT:CreateDoubleColorPicker(name, colors, callback, opts)
             color = colors,
             callback = callback,
         },
-    }
-    table.insert(self.elements, el)
-    return el
+    })
 end
 
 function GroupMT:CreateList(name, columns, size, opts)
     opts = opts or {}
-    local el = {
-        type = "list",
-        multiname = name,
-        columns = columns,
-        size = size,
+    table.insert(self.elements, {
+        type = "list", multiname = name,
+        columns = columns, size = size,
         callback = opts.Callback,
-    }
-    table.insert(self.elements, el)
-    return el
+    })
 end
 
--- =========================================================
--- Window builder
--- =========================================================
+-- Settings tab builder (auto-appended to every window)
+local function build_settings_tab()
+    return {
+        name = "Settings",
+        content = {
+            {
+                name = "Cheat Settings",
+                x = menu.columns.left,
+                y = menu.columns.right - 185,
+                width = menu.columns.width,
+                height = 182,
+                content = {
+                    {
+                        type = "toggle",
+                        name = "Menu Accent",
+                        value = false,
+                        extra = {
+                            type = "single colorpicker",
+                            name = "Accent Color",
+                            color = { 127, 72, 163 },
+                        },
+                    },
+                    {
+                        type = "toggle",
+                        name = "Watermark",
+                        value = true,
+                    },
+                    {
+                        type = "toggle",
+                        name = "Menu Toggle",
+                        value = false,
+                        extra = {
+                            type = "keybind",
+                            key = Enum.KeyCode.Delete,
+                            toggletype = 2,
+                            callback = function()
+                                if menu and menu.toggle_fade then
+                                    menu:toggle_fade()
+                                end
+                            end,
+                        },
+                    },
+                    {
+                        type = "button",
+                        name = "Set Clipboard Game ID",
+                    },
+                    {
+                        type = "button",
+                        name = "Unload Cheat",
+                        doubleclick = true,
+                    },
+                    {
+                        type = "toggle",
+                        name = "Allow Unsafe Features",
+                        value = false,
+                    },
+                },
+            },
+            {
+                name = "Configuration",
+                x = menu.columns.right,
+                y = menu.columns.left + 50,
+                width = menu.columns.width,
+                height = 182,
+                content = {
+                    {
+                        type = "textbox",
+                        name = "ConfigName",
+                        file = true,
+                        text = "",
+                    },
+                    {
+                        type = "dropbox",
+                        name = "Configs",
+                        value = 1,
+                        values = GetConfigs(),
+                    },
+                    {
+                        type = "button",
+                        name = "Load Config",
+                        doubleclick = true,
+                    },
+                    {
+                        type = "button",
+                        name = "Save Config",
+                        doubleclick = true,
+                    },
+                    {
+                        type = "button",
+                        name = "Delete Config",
+                        doubleclick = true,
+                    },
+                },
+            },
+        },
+    }
+end
+
 local function finalize(window)
     local tabs = {}
     for _, tab in ipairs(window._tabs) do
         local tabtable = { name = tab._name, content = {} }
         for _, group in ipairs(tab._groups) do
-            local g = {
-                name = group.name,
-                autopos = group.side,
-                content = {},
-            }
+            local g = { name = group.name, autopos = group.side, content = {} }
             if group.fill then g.autofill = true end
             if group.size then g.size = group.size end
             for _, el in ipairs(group.elements) do
@@ -3143,11 +3001,12 @@ local function finalize(window)
         end
         table.insert(tabs, tabtable)
     end
+
+    -- Always append the required Settings tab
+    table.insert(tabs, build_settings_tab())
+
     menu.title = window._title
     menu.game  = window._game
-    if not isfolder("bitchbot/" .. menu.game) then
-        makefolder("bitchbot/" .. menu.game)
-    end
     menu.Initialize(tabs)
 
     -- Watermark
@@ -3160,9 +3019,9 @@ local function finalize(window)
     wm.height = 19
     wm.rect = {}
     Draw:FilledRect(false, wm.pos.x, wm.pos.y+1, wm.width, 2,
-        { menu.mc[1]-40, menu.mc[2]-40, menu.mc[3]-40, 255 }, wm.rect)
+        {menu.mc[1]-40, menu.mc[2]-40, menu.mc[3]-40, 255}, wm.rect)
     Draw:FilledRect(false, wm.pos.x, wm.pos.y, wm.width, 2,
-        { menu.mc[1], menu.mc[2], menu.mc[3], 255 }, wm.rect)
+        {menu.mc[1], menu.mc[2], menu.mc[3], 255}, wm.rect)
     Draw:FilledRect(false, wm.pos.x, wm.pos.y+3, wm.width, wm.height-5, {50,50,50,255}, wm.rect)
     for i = 0, wm.height-4 do
         Draw:FilledRect(false, wm.pos.x, wm.pos.y+3+i, wm.width, 1,
@@ -3172,26 +3031,27 @@ local function finalize(window)
     Draw:OutlinedRect(false, wm.pos.x-1, wm.pos.y-1, wm.width+2, wm.height+2, {0,0,0,100}, wm.rect)
     Draw:OutlinedText(fulltext, 2, false, wm.pos.x+5, wm.pos.y+3, 13, false,
         {255,255,255,255}, {0,0,0,255}, wm.text)
-    for k, v in pairs(menu.watermark.rect) do v.Visible = true end
+    for _, v in pairs(menu.watermark.rect) do v.Visible = true end
     menu.watermark.text[1].Visible = true
 
-    -- Config name textbox init
+    -- Config textbox init
     if menu.options["Settings"] and menu.options["Settings"]["Configuration"] then
-        local textbox = menu.options["Settings"]["Configuration"]["ConfigName"]
-        local relconfigs = GetConfigs()
-        if relconfigs[menu.options["Settings"]["Configuration"]["Configs"][1]] then
-            textbox[1] = relconfigs[menu.options["Settings"]["Configuration"]["Configs"][1]]
-            textbox[4].Text = textbox[1]
+        local tb = menu.options["Settings"]["Configuration"]["ConfigName"]
+        local rel = GetConfigs()
+        if rel[menu.options["Settings"]["Configuration"]["Configs"][1]] then
+            tb[1] = rel[menu.options["Settings"]["Configuration"]["Configs"][1]]
+            tb[4].Text = tb[1]
         end
     end
 
     loadingthing.Visible = false
+    menu.ready = true
     if not menu.open then
         menu.fading = true
         menu.fadestart = tick()
     end
     CreateNotification("UI loaded.")
-    CreateNotification("Press RightShift to open / close the menu.")
+    CreateNotification("Press Delete to open / close.")
 end
 
 function Library:CreateWindow(config)
@@ -3201,41 +3061,20 @@ function Library:CreateWindow(config)
         _game  = config.Game or "uni",
         _tabs  = {},
     }
-    menu.title = window._title
-    menu.game  = window._game
-
     function window:CreateTab(name)
-        local tab = { _name = name, _groups = {}, _window = self }
+        local tab = { _name = name, _groups = {} }
         table.insert(self._tabs, tab)
         return setmetatable(tab, { __index = TabMT })
     end
-
-    if config.Build then
-        config.Build(window)
-    end
-    -- Defer finalize so user can add all elements first
-    task.defer(function()
-        finalize(window)
-    end)
+    if config.Build then config.Build(window) end
+    task.defer(function() finalize(window) end)
     return window
 end
 
--- =========================================================
--- Hooks for existing game logic / friends / priority
--- =========================================================
 function Library:GetMenu() return menu end
 function Library:GetOption(tab, group, name)
-    if not menu then return nil end
-    if menu.GetVal then return menu:GetVal(tab, group, name) end
+    if menu and menu.GetVal then return menu:GetVal(tab, group, name) end
 end
-function Library:SetOption(tab, group, name, value)
-    if not menu or not menu.options[tab] then return end
-    local opt = menu.options[tab][group][name]
-    if not opt then return end
-    opt[1] = value
-end
-function Library:Unload()
-    if menu and menu.unload then menu:unload() end
-end
+function Library:Unload() if menu and menu.unload then menu:unload() end end
 
 return Library
