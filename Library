@@ -1,18 +1,14 @@
 local Library = {}
 Library.__index = Library
 
--- =========================================================
--- Basic utilities
--- =========================================================
+-- =========================================================================
+-- Low-level utilities
+-- =========================================================================
 local function map(X, A, B, C, D) return (X - A) / (B - A) * (D - C) + C end
 local function clamp(a, lo, hi)
     if a > hi then return hi
     elseif a < lo then return lo
     else return a end
-end
-local function round(num, dp)
-    local mult = 10 ^ (dp or 0)
-    return math.floor(num * mult + 0.5) / mult
 end
 local function CreateThread(f, ...)
     local t = coroutine.create(f)
@@ -43,10 +39,12 @@ local function MultiThreadList(obj, ...)
     end
 end
 
--- =========================================================
--- Constants used by Draw.*
--- (MUST be before Draw is defined)
--- =========================================================
+-- =========================================================================
+-- !!! MUST be defined BEFORE local Draw = {} !!!
+-- These are referenced from inside Draw:Toggle / Draw:Slider / Draw:CoolBox /
+-- Draw:Combobox / Draw:Keybind / etc. If they are declared after Draw, you
+-- get "attempt to call a nil value" at the first element creation.
+-- =========================================================================
 local textBoxLetters = {
     "A","B","C","D","E","F","G","H","I","J","K","L","M",
     "N","O","P","Q","R","S","T","U","V","W","X","Y","Z",
@@ -129,12 +127,11 @@ local function ColorRange(value, ranges)
         Lerp(lv, minc.color.b, maxc.color.b))
 end
 
--- =========================================================
+-- =========================================================================
 -- Event system
--- =========================================================
+-- =========================================================================
 local event = {}
 local allevent = {}
-
 function event.new(eventname, eventtable, requirename)
     if eventname then
         assert(allevent[eventname] == nil,
@@ -171,15 +168,14 @@ function event.new(eventname, eventtable, requirename)
     if eventname then allevent[eventname] = { event = newevent, fire = fire } end
     return newevent, fire
 end
-
 local function FireEvent(eventname, ...)
     if allevent[eventname] then return allevent[eventname].fire(...) end
 end
 local function GetEvent(eventname) return allevent[eventname] end
 
--- =========================================================
+-- =========================================================================
 -- Notifications
--- =========================================================
+-- =========================================================================
 do
     local notes = {}
     local function DrawingObject(t, col)
@@ -207,28 +203,21 @@ do
         s.Font = 2
         return s
     end
-
     function CreateNotification(t, customcolor)
-        local gap = 25
-        local width = 18
-        local alpha = 255
-        local time = 0
-        local estep = 0
-        local eestep = 0.02
-        local insety = 0
+        local gap, width = 25, 18
+        local alpha, time, estep, eestep, insety = 255, 0, 0, 0.02, 0
         local Note = {
             enabled = true,
             targetPos = Vector2.new(50, 33),
             size = Vector2.new(200, width),
             drawings = {
                 outline = Rectangle(202, width + 2, false, Color3.new(0, 0, 0)),
-                fade = Rectangle(202, width + 2, false, Color3.new(0, 0, 0)),
+                fade    = Rectangle(202, width + 2, false, Color3.new(0, 0, 0)),
             },
             Remove = function(self, d)
                 if d.Position.x < d.Size.x then
                     for k, drawing in pairs(self.drawings) do
-                        drawing:Remove()
-                        drawing = false
+                        drawing:Remove(); drawing = false
                     end
                     self.enabled = false
                 end
@@ -236,19 +225,15 @@ do
             Update = function(self, num, listLength, dt)
                 local pos = self.targetPos
                 local indexOffset = (listLength - num) * gap
-                if insety < indexOffset then
-                    insety -= (insety - indexOffset) * 0.2
-                else
-                    insety = indexOffset
-                end
+                if insety < indexOffset then insety -= (insety - indexOffset) * 0.2
+                else insety = indexOffset end
                 local size = self.size
                 local tpos = Vector2.new(
                     pos.x - size.x / time - map(alpha, 0, 255, size.x, 0),
                     pos.y + insety)
                 self.pos = tpos
                 local locRect = {
-                    x = math.ceil(tpos.x),
-                    y = math.ceil(tpos.y),
+                    x = math.ceil(tpos.x), y = math.ceil(tpos.y),
                     w = math.floor(size.x - map(255 - alpha, 0, 255, 0, 70)),
                     h = size.y,
                 }
@@ -305,20 +290,13 @@ do
         if Note.drawings.text.TextBounds.x + 7 > Note.size.x then
             Note.size = Vector2.new(Note.drawings.text.TextBounds.x + 7, Note.size.y)
         end
-        Note.drawings.line = Rectangle(1, Note.size.y - 2, true, color)
+        Note.drawings.line  = Rectangle(1, Note.size.y - 2, true, color)
         Note.drawings.line1 = Rectangle(1, Note.size.y - 2, true, color)
         notes[#notes + 1] = Note
     end
-
     game:GetService("RunService").RenderStepped:Connect(function(dt)
-        local smallest = math.huge
         for k = 1, #notes do
-            local v = notes[k]
-            if v and v.enabled then
-                smallest = k < smallest and k or smallest
-            else
-                table.remove(notes, k)
-            end
+            if not (notes[k] and notes[k].enabled) then table.remove(notes, k) end
         end
         local length = #notes
         for k = 1, #notes do
@@ -331,15 +309,15 @@ do
     end)
 end
 
--- =========================================================
+-- =========================================================================
 -- Menu container
--- =========================================================
+-- =========================================================================
 local menuWidth, menuHeight = 500, 600
 local menu = {
     w = menuWidth, h = menuHeight, x = 0, y = 0,
     columns = {
         width = (menuWidth - 40) / 2,
-        left = 17,
+        left  = 17,
         right = (menuWidth - 20) / 2 + 13,
     },
     activetab = 1, open = true, fadestart = 0, fading = false,
@@ -362,9 +340,9 @@ local menu = {
     title = "UI Library",
 }
 
--- =========================================================
--- Drawing helpers (now ColorRange / KeyEnumToName etc. exist)
--- =========================================================
+-- =========================================================================
+-- Drawing helpers  (RGB and Draw come AFTER the utility block above)
+-- =========================================================================
 local allrender = {}
 local RGB = Color3.fromRGB
 local Draw = {}
@@ -381,75 +359,50 @@ do
     end
     function Draw:OutlinedRect(visible, x, y, w, h, clr, tablename)
         local t = Drawing.new("Square")
-        t.Visible = visible
-        t.Position = Vector2.new(x, y)
-        t.Size = Vector2.new(w, h)
-        t.Color = RGB(clr[1], clr[2], clr[3])
-        t.Filled = false
-        t.Thickness = 0
+        t.Visible = visible; t.Position = Vector2.new(x, y); t.Size = Vector2.new(w, h)
+        t.Color = RGB(clr[1], clr[2], clr[3]); t.Filled = false; t.Thickness = 0
         t.Transparency = clr[4] / 255
         table.insert(tablename, t)
         if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
     end
     function Draw:FilledRect(visible, x, y, w, h, clr, tablename)
         local t = Drawing.new("Square")
-        t.Visible = visible
-        t.Position = Vector2.new(x, y)
-        t.Size = Vector2.new(w, h)
-        t.Color = RGB(clr[1], clr[2], clr[3])
-        t.Filled = true
-        t.Thickness = 0
+        t.Visible = visible; t.Position = Vector2.new(x, y); t.Size = Vector2.new(w, h)
+        t.Color = RGB(clr[1], clr[2], clr[3]); t.Filled = true; t.Thickness = 0
         t.Transparency = clr[4] / 255
         table.insert(tablename, t)
         if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
     end
     function Draw:Line(visible, thickness, sx, sy, ex, ey, clr, tablename)
         local t = Drawing.new("Line")
-        t.Visible = visible
-        t.Thickness = thickness
-        t.From = Vector2.new(sx, sy)
-        t.To = Vector2.new(ex, ey)
-        t.Color = RGB(clr[1], clr[2], clr[3])
-        t.Transparency = clr[4] / 255
+        t.Visible = visible; t.Thickness = thickness
+        t.From = Vector2.new(sx, sy); t.To = Vector2.new(ex, ey)
+        t.Color = RGB(clr[1], clr[2], clr[3]); t.Transparency = clr[4] / 255
         table.insert(tablename, t)
         if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
     end
     function Draw:Image(visible, data, x, y, w, h, transparency, tablename)
         local t = Drawing.new("Image")
-        t.Visible = visible
-        t.Position = Vector2.new(x, y)
-        t.Size = Vector2.new(w, h)
-        t.Transparency = transparency
-        t.Data = data
+        t.Visible = visible; t.Position = Vector2.new(x, y); t.Size = Vector2.new(w, h)
+        t.Transparency = transparency; t.Data = data
         table.insert(tablename, t)
         if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
     end
     function Draw:Text(text, font, visible, x, y, size, centered, clr, tablename)
         local t = Drawing.new("Text")
-        t.Text = text
-        t.Visible = visible
-        t.Position = Vector2.new(x, y)
-        t.Size = size
-        t.Center = centered
-        t.Color = RGB(clr[1], clr[2], clr[3])
-        t.Transparency = clr[4] / 255
-        t.Outline = false
-        t.Font = font
+        t.Text = text; t.Visible = visible; t.Position = Vector2.new(x, y)
+        t.Size = size; t.Center = centered
+        t.Color = RGB(clr[1], clr[2], clr[3]); t.Transparency = clr[4] / 255
+        t.Outline = false; t.Font = font
         table.insert(tablename, t)
         if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
     end
     function Draw:OutlinedText(text, font, visible, x, y, size, centered, clr, clr2, tablename)
         local t = Drawing.new("Text")
-        t.Text = text
-        t.Visible = visible
-        t.Position = Vector2.new(x, y)
-        t.Size = size
-        t.Center = centered
-        t.Color = RGB(clr[1], clr[2], clr[3])
-        t.Transparency = clr[4] / 255
-        t.Outline = true
-        t.OutlineColor = RGB(clr2[1], clr2[2], clr2[3])
-        t.Font = font
+        t.Text = text; t.Visible = visible; t.Position = Vector2.new(x, y)
+        t.Size = size; t.Center = centered
+        t.Color = RGB(clr[1], clr[2], clr[3]); t.Transparency = clr[4] / 255
+        t.Outline = true; t.OutlineColor = RGB(clr2[1], clr2[2], clr2[3]); t.Font = font
         if tablename then table.insert(tablename, t) end
         if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
         return t
@@ -457,10 +410,8 @@ do
     function Draw:Triangle(visible, filled, pa, pb, pc, clr, tablename)
         clr = clr or {255,255,255,1}
         local t = Drawing.new("Triangle")
-        t.Visible = visible
-        t.Transparency = clr[4] or 1
-        t.Color = RGB(clr[1], clr[2], clr[3])
-        t.Thickness = 4.1
+        t.Visible = visible; t.Transparency = clr[4] or 1
+        t.Color = RGB(clr[1], clr[2], clr[3]); t.Thickness = 4.1
         if pa and pb and pc then
             t.PointA = Vector2.new(pa[1], pa[2])
             t.PointB = Vector2.new(pb[1], pb[2])
@@ -472,26 +423,18 @@ do
     end
     function Draw:Circle(visible, x, y, size, thickness, sides, clr, tablename)
         local t = Drawing.new("Circle")
-        t.Position = Vector2.new(x, y)
-        t.Visible = visible
-        t.Radius = size
-        t.Thickness = thickness
-        t.NumSides = sides
-        t.Transparency = clr[4]
-        t.Filled = false
+        t.Position = Vector2.new(x, y); t.Visible = visible
+        t.Radius = size; t.Thickness = thickness; t.NumSides = sides
+        t.Transparency = clr[4]; t.Filled = false
         t.Color = RGB(clr[1], clr[2], clr[3])
         table.insert(tablename, t)
         if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
     end
     function Draw:FilledCircle(visible, x, y, size, thickness, sides, clr, tablename)
         local t = Drawing.new("Circle")
-        t.Position = Vector2.new(x, y)
-        t.Visible = visible
-        t.Radius = size
-        t.Thickness = thickness
-        t.NumSides = sides
-        t.Transparency = clr[4]
-        t.Filled = true
+        t.Position = Vector2.new(x, y); t.Visible = visible
+        t.Radius = size; t.Thickness = thickness; t.NumSides = sides
+        t.Transparency = clr[4]; t.Filled = true
         t.Color = RGB(clr[1], clr[2], clr[3])
         table.insert(tablename, t)
         if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
@@ -581,10 +524,9 @@ do
             })
             length += tab[#tab-1].TextBounds.X+10
         end
-        local settab = 1
         for k, v in pairs(selected) do
-            menu.postable[v.postable][2] = selected_pos[settab].pos
-            v.drawn.Size = Vector2.new(selected_pos[settab].length, 2)
+            menu.postable[v.postable][2] = selected_pos[1].pos
+            v.drawn.Size = Vector2.new(selected_pos[1].length, 2)
         end
         return { bar = selected, barpos = selected_pos, click_pos = click_pos, nametext = nametext }
     end
@@ -811,6 +753,12 @@ do
         return tab[#tab]
     end
 end
+
+-- =========================================================================
+-- Everything from here on down (starting at "-- Player / game services")
+-- is IDENTICAL to my previous message. DO NOT move the utility block above
+-- below this line — it must stay where it is, BEFORE `local Draw = {}`.
+-- =========================================================================
 -- =========================================================
 -- Player / game services
 -- =========================================================
